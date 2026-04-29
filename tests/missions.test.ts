@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -91,7 +91,7 @@ describe("mission state machine", () => {
 });
 
 describe("mission store", () => {
-  it("creates a mission.yaml file and ledger.jsonl", async () => {
+  it("creates mission.yaml, graph.json, and ledger.jsonl", async () => {
     const cwd = await tempWorkspaceRoot();
     await initWorkspace(cwd);
 
@@ -99,12 +99,17 @@ describe("mission store", () => {
     const mission = await store.createMission({ goal: "Prepare my launch checklist" });
     const missionDir = path.join(cwd, ".narthynx", "missions", mission.id);
     const raw = await readFile(path.join(missionDir, "mission.yaml"), "utf8");
+    const graphRaw = await readFile(path.join(missionDir, "graph.json"), "utf8");
     const ledger = await readLedgerEvents(path.join(missionDir, "ledger.jsonl"));
+    const read = await store.readMission(mission.id);
 
     expect(mission.id).toMatch(/^m_/);
     expect(mission.state).toBe("created");
     expect(raw).toContain("Prepare my launch checklist");
+    expect(graphRaw).toContain("Understand goal");
+    expect(read.planGraph).toEqual(JSON.parse(graphRaw));
     expect(ledger[0]?.type).toBe("mission.created");
+    expect(ledger[1]?.type).toBe("plan.created");
   });
 
   it("reads missions after creating a fresh store instance", async () => {
@@ -152,8 +157,8 @@ describe("mission store", () => {
     const ledger = await store.readMissionLedger(mission.id);
 
     expect(updated.state).toBe("planning");
-    expect(ledger.map((event) => event.type)).toEqual(["mission.created", "mission.state_changed"]);
-    expect(ledger[1]?.details).toEqual({
+    expect(ledger.map((event) => event.type)).toEqual(["mission.created", "plan.created", "mission.state_changed"]);
+    expect(ledger[2]?.details).toEqual({
       from: "created",
       to: "planning"
     });
@@ -173,7 +178,25 @@ describe("mission store", () => {
     const secondStore = createMissionStore(cwd);
     const ledger = await secondStore.readMissionLedger(mission.id);
 
-    expect(ledger.map((event) => event.type)).toEqual(["mission.created", "mission.state_changed"]);
+    expect(ledger.map((event) => event.type)).toEqual(["mission.created", "plan.created", "mission.state_changed"]);
+  });
+
+  it("backfills a missing graph for older missions", async () => {
+    const cwd = await tempWorkspaceRoot();
+    await initWorkspace(cwd);
+
+    const store = createMissionStore(cwd);
+    const mission = await store.createMission({ goal: "Prepare my launch checklist" });
+    const graphPath = path.join(cwd, ".narthynx", "missions", mission.id, "graph.json");
+    await rm(graphPath, { force: true });
+
+    const graph = await store.ensureMissionPlanGraph(mission.id);
+    const updatedMission = await store.readMission(mission.id);
+    const ledger = await store.readMissionLedger(mission.id);
+
+    expect(graph.nodes).toHaveLength(6);
+    expect(updatedMission.planGraph).toEqual(graph);
+    expect(ledger.map((event) => event.type)).toEqual(["mission.created", "plan.created", "plan.created"]);
   });
 
   it("requires an initialized workspace", async () => {

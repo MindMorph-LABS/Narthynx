@@ -13,6 +13,7 @@ export const CLI_COMMANDS = [
   "mission",
   "missions",
   "open",
+  "plan",
   "timeline",
   "approve",
   "pause",
@@ -24,12 +25,13 @@ export const CLI_COMMANDS = [
 export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
   (name): name is Exclude<
     (typeof CLI_COMMANDS)[number],
-    "init" | "mission" | "missions" | "open" | "timeline" | "doctor"
+    "init" | "mission" | "missions" | "open" | "plan" | "timeline" | "doctor"
   > =>
     name !== "init" &&
     name !== "mission" &&
     name !== "missions" &&
     name !== "open" &&
+    name !== "plan" &&
     name !== "timeline" &&
     name !== "doctor"
 );
@@ -53,14 +55,14 @@ const intro = [
   "Narthynx is a local-first Mission Agent OS.",
   "An AI agent that runs missions, not chats.",
   "",
-  "`narthynx init`, `doctor`, `mission`, `missions`, `open`, and `timeline` are available in Phase 3.",
-  "Planning, approvals, replay, and execution are not implemented yet."
+  "`narthynx init`, `doctor`, `mission`, `missions`, `open`, `plan`, and `timeline` are available in Phase 4.",
+  "Plan execution, approvals, replay, and reports are not implemented yet."
 ].join("\n");
 
 function notImplementedMessage(commandName: string): string {
   return [
-    `Command "narthynx ${commandName}" is not implemented in Phase 3.`,
-    "Phase 3 provides mission persistence and append-only ledgers. Execution behavior starts in later phases."
+    `Command "narthynx ${commandName}" is not implemented in Phase 4.`,
+    "Phase 4 provides visible persisted plan graphs. Execution behavior starts in later phases."
   ].join("\n");
 }
 
@@ -83,9 +85,9 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
     "after",
     [
       "",
-      "Phase 3 status:",
-      "  Workspace init, doctor checks, mission persistence, and append-only ledger timelines are implemented.",
-      "  Planning, approvals, replay, and execution still fail honestly until their build phases land."
+      "Phase 4 status:",
+      "  Workspace init, mission persistence, ledgers, and visible persisted plan graphs are implemented.",
+      "  Plan execution, approvals, replay, and reports still fail honestly until their build phases land."
     ].join("\n")
   );
 
@@ -202,7 +204,25 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
         io.writeOut(`created: ${mission.createdAt}\n`);
         io.writeOut(`updated: ${mission.updatedAt}\n`);
         io.writeOut(`path: ${missionFilePath(paths.missionsDir, mission.id)}\n`);
+        io.writeOut(`plan: narthynx plan ${mission.id}\n`);
         io.writeOut(`timeline: narthynx timeline ${mission.id}\n`);
+      } catch (error) {
+        writeCliError(io, error);
+      }
+    });
+
+  program
+    .command("plan")
+    .description("Show or create a mission plan graph. (Phase 4)")
+    .argument("<id>", "Mission ID")
+    .action(async (id: string) => {
+      try {
+        const graph = await missionStore.ensureMissionPlanGraph(id);
+
+        io.writeOut(`Plan for ${id}\n`);
+        for (const [index, node] of graph.nodes.entries()) {
+          io.writeOut(`${index + 1}. [${node.type}] ${node.title} - ${node.status}\n`);
+        }
       } catch (error) {
         writeCliError(io, error);
       }

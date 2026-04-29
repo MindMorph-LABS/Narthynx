@@ -5,6 +5,13 @@ import YAML from "yaml";
 
 import { resolveWorkspacePaths } from "../config/workspace";
 import { createMissionId } from "../utils/ids";
+import {
+  createDeterministicPlanGraph,
+  graphFilePath,
+  readPlanGraph,
+  writePlanGraph,
+  type PlanGraph
+} from "./graph";
 import { appendLedgerEvent, ledgerFilePath, readLedgerEvents, type LedgerEvent } from "./ledger";
 import { missionSchema, type CreateMissionInput, type Mission, type MissionState } from "./schema";
 import { assertMissionStateTransition } from "./state-machine";
@@ -17,6 +24,8 @@ export interface MissionStore {
   listMissions(): Promise<Mission[]>;
   updateMissionState(id: string, state: MissionState): Promise<Mission>;
   readMissionLedger(id: string, options?: { allowMissing?: boolean }): Promise<LedgerEvent[]>;
+  ensureMissionPlanGraph(id: string): Promise<PlanGraph>;
+  readMissionPlanGraph(id: string): Promise<PlanGraph>;
 }
 
 export function createMissionStore(cwd = process.cwd()): MissionStore {
@@ -31,7 +40,7 @@ export function createMissionStore(cwd = process.cwd()): MissionStore {
       }
 
       const now = new Date().toISOString();
-      const mission: Mission = {
+      const baseMission: Mission = {
         id: createMissionId(),
         title: normalizeTitle(input.title ?? goal),
         goal,
@@ -57,11 +66,17 @@ export function createMissionStore(cwd = process.cwd()): MissionStore {
         createdAt: now,
         updatedAt: now
       };
+      const graph = createDeterministicPlanGraph(baseMission, now);
+      const mission: Mission = {
+        ...baseMission,
+        planGraph: graph
+      };
 
       const parsed = missionSchema.parse(mission);
       const missionDir = missionDirectory(paths.missionsDir, parsed.id);
       await mkdir(missionDir, { recursive: true });
       await writeMissionFile(missionDir, parsed);
+      await writePlanGraph(graphFilePath(missionDir), graph);
       await appendLedgerEvent(ledgerFilePath(missionDir), {
         missionId: parsed.id,
         type: "mission.created",
@@ -72,6 +87,16 @@ export function createMissionStore(cwd = process.cwd()): MissionStore {
           state: parsed.state
         },
         timestamp: parsed.createdAt
+      });
+      await appendLedgerEvent(ledgerFilePath(missionDir), {
+        missionId: parsed.id,
+        type: "plan.created",
+        summary: "Deterministic MVP plan graph created.",
+        details: {
+          nodeCount: graph.nodes.length,
+          edgeCount: graph.edges.length
+        },
+        timestamp: graph.createdAt
       });
 
       return parsed;
@@ -126,6 +151,58 @@ export function createMissionStore(cwd = process.cwd()): MissionStore {
     async readMissionLedger(id, options = {}) {
       await this.readMission(id);
       return readLedgerEvents(ledgerFilePath(missionDirectory(paths.missionsDir, id)), options);
+    },
+
+    async ensureMissionPlanGraph(id) {
+      const mission = await this.readMission(id);
+      const missionDir = missionDirectory(paths.missionsDir, id);
+      const filePath = graphFilePath(missionDir);
+
+      try {
+        const graph = await readPlanGraph(filePath);
+        if (JSON.stringify(mission.planGraph) !== JSON.stringify(graph)) {
+          const updated = missionSchema.parse({
+            ...mission,
+            planGraph: graph,
+            updatedAt: new Date().toISOString()
+          });
+          await writeMissionFile(missionDir, updated);
+        }
+
+        return graph;
+      } catch (error) {
+        if (!isMissingGraphError(error)) {
+          throw error;
+        }
+
+        const now = new Date().toISOString();
+        const graph = createDeterministicPlanGraph(mission, now);
+        await writePlanGraph(filePath, graph);
+        const updated = missionSchema.parse({
+          ...mission,
+          planGraph: graph,
+          updatedAt: now
+        });
+        await writeMissionFile(missionDir, updated);
+        await appendLedgerEvent(ledgerFilePath(missionDir), {
+          missionId: mission.id,
+          type: "plan.created",
+          summary: "Deterministic MVP plan graph created.",
+          details: {
+            nodeCount: graph.nodes.length,
+            edgeCount: graph.edges.length,
+            backfilled: true
+          },
+          timestamp: graph.createdAt
+        });
+
+        return graph;
+      }
+    },
+
+    async readMissionPlanGraph(id) {
+      await this.readMission(id);
+      return readPlanGraph(graphFilePath(missionDirectory(paths.missionsDir, id)));
     }
   };
 }
@@ -189,4 +266,8 @@ function normalizeTitle(value: string): string {
   }
 
   return `${trimmed.slice(0, 69)}...`;
+}
+
+function isMissingGraphError(error: unknown): boolean {
+  return error instanceof Error && error.message.includes("ENOENT");
 }
