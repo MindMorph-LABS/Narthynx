@@ -235,7 +235,7 @@ describe("tool runner", () => {
     await expect(readFile(path.join(cwd, "launch.md"), "utf8")).rejects.toThrow();
   }, 15_000);
 
-  it("keeps report.write approval-only in Phase 7", async () => {
+  it("executes approved report.write only under mission artifacts", async () => {
     const { cwd, mission } = await initializedMission();
     const runner = createToolRunner({ cwd });
     const approvalStore = createApprovalStore(cwd);
@@ -250,10 +250,13 @@ describe("tool runner", () => {
     await approvalStore.decideApproval(approvalId ?? "", "approved");
     const result = await runner.runApprovedTool(approvalId ?? "");
 
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.message).toContain("not implemented in Phase 7");
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(JSON.stringify(result.output)).toContain("artifacts/report.md");
     }
+    await expect(readFile(path.join(cwd, ".narthynx", "missions", mission.id, "artifacts", "report.md"), "utf8")).resolves.toBe(
+      "report"
+    );
     await expect(readFile(path.join(cwd, "report.md"), "utf8")).rejects.toThrow();
   }, 15_000);
 
