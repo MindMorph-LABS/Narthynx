@@ -3,7 +3,8 @@ import { fileURLToPath } from "node:url";
 
 import { Command, CommanderError } from "commander";
 
-import { doctorWorkspace, initWorkspace } from "../config/workspace";
+import { doctorWorkspace, initWorkspace, resolveWorkspacePaths } from "../config/workspace";
+import { createMissionStore, missionFilePath } from "../missions/store";
 
 export const VERSION = "0.1.0";
 
@@ -20,8 +21,8 @@ export const CLI_COMMANDS = [
 ] as const;
 
 export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
-  (name): name is Exclude<(typeof CLI_COMMANDS)[number], "init" | "doctor"> =>
-    name !== "init" && name !== "doctor"
+  (name): name is Exclude<(typeof CLI_COMMANDS)[number], "init" | "mission" | "missions" | "open" | "doctor"> =>
+    name !== "init" && name !== "mission" && name !== "missions" && name !== "open" && name !== "doctor"
 );
 
 export interface CliResult {
@@ -43,19 +44,20 @@ const intro = [
   "Narthynx is a local-first Mission Agent OS.",
   "An AI agent that runs missions, not chats.",
   "",
-  "`narthynx init` and `narthynx doctor` are available in Phase 1.",
-  "The mission runtime is not implemented yet."
+  "`narthynx init`, `doctor`, `mission`, `missions`, and `open` are available in Phase 2.",
+  "Planning, ledgers, approvals, replay, and execution are not implemented yet."
 ].join("\n");
 
 function notImplementedMessage(commandName: string): string {
   return [
-    `Command "narthynx ${commandName}" is not implemented in Phase 1.`,
-    "Phase 1 provides workspace initialization and doctor checks. Mission runtime behavior starts in later phases."
+    `Command "narthynx ${commandName}" is not implemented in Phase 2.`,
+    "Phase 2 provides mission schema, file persistence, listing, and opening. Execution behavior starts in later phases."
   ].join("\n");
 }
 
 export function createProgram(io: CliIo, options: CliOptions = {}): Command {
   const cwd = options.cwd ?? process.cwd();
+  const missionStore = createMissionStore(cwd);
   const program = new Command();
 
   program
@@ -72,9 +74,9 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
     "after",
     [
       "",
-      "Phase 1 status:",
-      "  Workspace init and doctor checks are implemented.",
-      "  Mission creation, ledgers, approvals, replay, and execution still fail honestly until their build phases land."
+      "Phase 2 status:",
+      "  Workspace init, doctor checks, mission creation, mission listing, and mission opening are implemented.",
+      "  Planning, ledgers, approvals, replay, and execution still fail honestly until their build phases land."
     ].join("\n")
   );
 
@@ -126,16 +128,77 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
     .command("mission")
     .description("Create a mission from a natural-language goal. (Phase 2)")
     .argument("[goal...]", "Mission goal")
-    .action(() => {
-      io.writeErr(`${notImplementedMessage("mission")}\n`);
-      process.exitCode = 1;
+    .action(async (goalParts: string[]) => {
+      const goal = goalParts.join(" ").trim();
+
+      if (goal.length === 0) {
+        io.writeErr("Mission goal is required.\nUsage: narthynx mission \"Prepare my launch checklist\"\n");
+        process.exitCode = 1;
+        return;
+      }
+
+      try {
+        const mission = await missionStore.createMission({ goal });
+        const paths = resolveWorkspacePaths(cwd);
+
+        io.writeOut("Mission created\n");
+        io.writeOut(`id: ${mission.id}\n`);
+        io.writeOut(`title: ${mission.title}\n`);
+        io.writeOut(`state: ${mission.state}\n`);
+        io.writeOut(`path: ${missionFilePath(paths.missionsDir, mission.id)}\n`);
+      } catch (error) {
+        writeCliError(io, error);
+      }
     });
 
-  const otherPlaceholderCommands = PLACEHOLDER_COMMANDS.filter(
-    (name): name is Exclude<(typeof PLACEHOLDER_COMMANDS)[number], "mission"> => name !== "mission"
-  );
+  program
+    .command("missions")
+    .description("List persisted missions. (Phase 2)")
+    .action(async () => {
+      try {
+        const missions = await missionStore.listMissions();
 
-  for (const commandName of otherPlaceholderCommands) {
+        if (missions.length === 0) {
+          io.writeOut("No missions found.\n");
+          return;
+        }
+
+        io.writeOut("Missions\n");
+        for (const mission of missions) {
+          io.writeOut(`${mission.id}  ${mission.state}  ${mission.createdAt}  ${mission.title}\n`);
+        }
+      } catch (error) {
+        writeCliError(io, error);
+      }
+    });
+
+  program
+    .command("open")
+    .description("Open a persisted mission summary. (Phase 2)")
+    .argument("<id>", "Mission ID")
+    .action(async (id: string) => {
+      try {
+        const mission = await missionStore.readMission(id);
+        const paths = resolveWorkspacePaths(cwd);
+
+        io.writeOut(`Mission ${mission.id}\n`);
+        io.writeOut(`title: ${mission.title}\n`);
+        io.writeOut(`goal: ${mission.goal}\n`);
+        io.writeOut(`state: ${mission.state}\n`);
+        io.writeOut("success criteria:\n");
+        for (const criterion of mission.successCriteria) {
+          io.writeOut(`  - ${criterion}\n`);
+        }
+        io.writeOut(`risk: ${mission.riskProfile.level} (${mission.riskProfile.reasons.join("; ")})\n`);
+        io.writeOut(`created: ${mission.createdAt}\n`);
+        io.writeOut(`updated: ${mission.updatedAt}\n`);
+        io.writeOut(`path: ${missionFilePath(paths.missionsDir, mission.id)}\n`);
+      } catch (error) {
+        writeCliError(io, error);
+      }
+    });
+
+  for (const commandName of PLACEHOLDER_COMMANDS) {
     program
       .command(commandName)
       .description(placeholderDescription(commandName))
@@ -193,9 +256,6 @@ export async function runCli(argv: string[], options: CliOptions = {}): Promise<
 
 function placeholderDescription(commandName: (typeof PLACEHOLDER_COMMANDS)[number]): string {
   const descriptions: Record<(typeof PLACEHOLDER_COMMANDS)[number], string> = {
-    mission: "Create a mission from a natural-language goal. (Phase 2)",
-    missions: "List persisted missions. (Phase 2)",
-    open: "Open a persisted mission summary. (Phase 2)",
     approve: "Approve a queued action. (Phase 6)",
     pause: "Pause a mission. (Phase 2)",
     resume: "Resume a mission. (Phase 2)",
@@ -203,6 +263,12 @@ function placeholderDescription(commandName: (typeof PLACEHOLDER_COMMANDS)[numbe
   };
 
   return descriptions[commandName];
+}
+
+function writeCliError(io: CliIo, error: unknown): void {
+  const message = error instanceof Error ? error.message : "Unknown failure";
+  io.writeErr(`${message}\n`);
+  process.exitCode = 1;
 }
 
 function writePathList(io: CliIo, label: string, paths: string[], stream: "out" | "err" = "out"): void {

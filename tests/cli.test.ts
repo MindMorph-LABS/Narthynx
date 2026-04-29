@@ -59,10 +59,65 @@ describe("Narthynx CLI", () => {
     expect(result.stdout).toContain("Workspace is healthy");
   });
 
-  it("fails honestly for mission runtime placeholders", async () => {
-    const result = await runCli(["mission", "Prepare launch checklist"]);
+  it("creates a mission from the CLI", async () => {
+    const cwd = await tempWorkspaceRoot();
+    await runCli(["init"], { cwd });
+    const result = await runCli(["mission", "Prepare launch checklist"], { cwd });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("Mission created");
+    expect(result.stdout).toContain("id: m_");
+    expect(result.stdout).toContain("state: created");
+  });
+
+  it("lists missions across separate CLI calls", async () => {
+    const cwd = await tempWorkspaceRoot();
+    await runCli(["init"], { cwd });
+    await runCli(["mission", "Prepare launch checklist"], { cwd });
+    const result = await runCli(["missions"], { cwd });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("Missions");
+    expect(result.stdout).toContain("Prepare launch checklist");
+    expect(result.stdout).toContain("created");
+  });
+
+  it("opens a persisted mission summary", async () => {
+    const cwd = await tempWorkspaceRoot();
+    await runCli(["init"], { cwd });
+    const created = await runCli(["mission", "Prepare launch checklist"], { cwd });
+    const id = created.stdout.match(/id: (m_[^\s]+)/)?.[1];
+
+    expect(id).toBeDefined();
+    const result = await runCli(["open", id ?? ""], { cwd });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain(`Mission ${id}`);
+    expect(result.stdout).toContain("goal: Prepare launch checklist");
+    expect(result.stdout).toContain("success criteria:");
+  });
+
+  it("requires a mission goal", async () => {
+    const cwd = await tempWorkspaceRoot();
+    await runCli(["init"], { cwd });
+    const result = await runCli(["mission"], { cwd });
 
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("not implemented in Phase 1");
+    expect(result.stderr).toContain("Mission goal is required");
+  });
+
+  it("guides users to initialize the workspace before creating missions", async () => {
+    const cwd = await tempWorkspaceRoot();
+    const result = await runCli(["mission", "Prepare launch checklist"], { cwd });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Workspace is not initialized. Run: narthynx init");
+  });
+
+  it("fails honestly for later-phase placeholders", async () => {
+    const result = await runCli(["replay", "m_missing"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("not implemented in Phase 2");
   });
 });
