@@ -32,12 +32,14 @@ export type ToolRunResult =
       ok: true;
       toolName: string;
       output: unknown;
+      checkpointId?: string;
     }
   | {
       ok: false;
       toolName: string;
       message: string;
       blocked: boolean;
+      approvalId?: string;
     };
 
 export class ToolError extends Error {

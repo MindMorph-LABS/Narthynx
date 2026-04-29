@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 import { Command, CommanderError } from "commander";
 
 import { doctorWorkspace, initWorkspace, resolveWorkspacePaths } from "../config/workspace";
+import { createApprovalStore } from "../missions/approvals";
+import { createCheckpointStore } from "../missions/checkpoints";
 import { createMissionStore, missionFilePath } from "../missions/store";
 import { createToolRegistry } from "../tools/registry";
 import { createToolRunner } from "../tools/runner";
@@ -20,6 +22,7 @@ export const CLI_COMMANDS = [
   "tools",
   "tool",
   "approve",
+  "rewind",
   "pause",
   "resume",
   "replay",
@@ -29,7 +32,17 @@ export const CLI_COMMANDS = [
 export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
   (name): name is Exclude<
     (typeof CLI_COMMANDS)[number],
-    "init" | "mission" | "missions" | "open" | "plan" | "timeline" | "tools" | "tool" | "doctor"
+    | "init"
+    | "mission"
+    | "missions"
+    | "open"
+    | "plan"
+    | "timeline"
+    | "tools"
+    | "tool"
+    | "approve"
+    | "rewind"
+    | "doctor"
   > =>
     name !== "init" &&
     name !== "mission" &&
@@ -39,6 +52,8 @@ export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
     name !== "timeline" &&
     name !== "tools" &&
     name !== "tool" &&
+    name !== "approve" &&
+    name !== "rewind" &&
     name !== "doctor"
 );
 
@@ -61,20 +76,22 @@ const intro = [
   "Narthynx is a local-first Mission Agent OS.",
   "An AI agent that runs missions, not chats.",
   "",
-  "`narthynx init`, `doctor`, `mission`, `missions`, `open`, `plan`, `timeline`, `tools`, and `tool` are available in Phase 5.",
-  "Mission execution, approvals, replay, and write/report actions are not implemented yet."
+  "`narthynx init`, `doctor`, `mission`, `missions`, `open`, `plan`, `timeline`, `tools`, `tool`, `approve`, and `rewind` are available in Phase 7.",
+  "Mission execution, replay, and report actions are not implemented yet."
 ].join("\n");
 
 function notImplementedMessage(commandName: string): string {
   return [
-    `Command "narthynx ${commandName}" is not implemented in Phase 5.`,
-    "Phase 5 provides typed tool registration, safe read-only tool execution, and tool ledger events."
+    `Command "narthynx ${commandName}" is not implemented in Phase 7.`,
+    "Phase 7 provides approval-gated filesystem writes and checkpoints."
   ].join("\n");
 }
 
 export function createProgram(io: CliIo, options: CliOptions = {}): Command {
   const cwd = options.cwd ?? process.cwd();
   const missionStore = createMissionStore(cwd);
+  const approvalStore = createApprovalStore(cwd);
+  const checkpointStore = createCheckpointStore(cwd);
   const toolRegistry = createToolRegistry();
   const toolRunner = createToolRunner({ cwd, registry: toolRegistry });
   const program = new Command();
@@ -93,9 +110,9 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
     "after",
     [
       "",
-      "Phase 5 status:",
-      "  Workspace init, mission persistence, ledgers, plan graphs, and typed read-only tools are implemented.",
-      "  Mission execution, approvals, replay, and write/report actions still fail honestly until their build phases land."
+      "Phase 7 status:",
+      "  Workspace init, missions, ledgers, plan graphs, typed tools, approval gates, filesystem writes, and checkpoints are implemented.",
+      "  Mission execution, replay, and report actions still fail honestly until their build phases land."
     ].join("\n")
   );
 
@@ -308,6 +325,77 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
       }
     });
 
+  program
+    .command("approve")
+    .description("List, approve, or deny queued tool approvals. (Phase 6)")
+    .argument("[approval-id]", "Approval ID")
+    .option("--deny", "Deny the approval instead of approving it")
+    .option("--reason <text>", "Decision reason")
+    .action(async (approvalId: string | undefined, commandOptions: { deny?: boolean; reason?: string }) => {
+      try {
+        if (!approvalId) {
+          const approvals = await approvalStore.listPendingApprovals();
+          if (approvals.length === 0) {
+            io.writeOut("No pending approvals.\n");
+            return;
+          }
+
+          io.writeOut("Pending approvals\n");
+          for (const approval of approvals) {
+            io.writeOut(
+              `${approval.id}  mission=${approval.missionId}  tool=${approval.toolName}  risk=${approval.riskLevel}  status=${approval.status}\n`
+            );
+            io.writeOut(`  ${approval.prompt.split(/\r?\n/)[0]}\n`);
+          }
+          return;
+        }
+
+        const decision = commandOptions.deny ? "denied" : "approved";
+        const approval = await approvalStore.decideApproval(approvalId, decision, commandOptions.reason);
+        io.writeOut(`Approval ${approval.status}: ${approval.id}\n`);
+        io.writeOut(`mission: ${approval.missionId}\n`);
+        io.writeOut(`tool: ${approval.toolName}\n`);
+        if (approval.status === "approved") {
+          const continuation = await toolRunner.runApprovedTool(approval.id);
+          if (continuation.ok) {
+            io.writeOut("Approved action executed.\n");
+            if (continuation.checkpointId) {
+              io.writeOut(`checkpoint: ${continuation.checkpointId}\n`);
+            }
+            io.writeOut(`${JSON.stringify(continuation.output, null, 2)}\n`);
+            return;
+          }
+
+          io.writeOut(`${continuation.message}\n`);
+          if (approval.toolName === "filesystem.write") {
+            process.exitCode = 1;
+          }
+        } else {
+          io.writeOut("Recorded denial. The action was not executed.\n");
+        }
+      } catch (error) {
+        writeCliError(io, error);
+      }
+    });
+
+  program
+    .command("rewind")
+    .description("Restore a filesystem checkpoint. (Phase 7)")
+    .argument("<mission-id>", "Mission ID")
+    .argument("<checkpoint-id>", "Checkpoint ID")
+    .action(async (missionId: string, checkpointId: string) => {
+      try {
+        await missionStore.readMission(missionId);
+        const result = await checkpointStore.rewindCheckpoint(missionId, checkpointId);
+        io.writeOut(`Checkpoint rewound: ${result.checkpoint.id}\n`);
+        io.writeOut(`path: ${result.checkpoint.targetPath}\n`);
+        io.writeOut(`file rollback: ${result.fileRollback ? "yes" : "no"}\n`);
+        io.writeOut(`${result.message}\n`);
+      } catch (error) {
+        writeCliError(io, error);
+      }
+    });
+
   for (const commandName of PLACEHOLDER_COMMANDS) {
     program
       .command(commandName)
@@ -366,7 +454,6 @@ export async function runCli(argv: string[], options: CliOptions = {}): Promise<
 
 function placeholderDescription(commandName: (typeof PLACEHOLDER_COMMANDS)[number]): string {
   const descriptions: Record<(typeof PLACEHOLDER_COMMANDS)[number], string> = {
-    approve: "Approve a queued action. (Phase 6)",
     pause: "Pause a mission. (Phase 2)",
     resume: "Resume a mission. (Phase 2)",
     replay: "Replay a mission ledger. (Phase 9)"
