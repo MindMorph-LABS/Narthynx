@@ -6,6 +6,7 @@ import { Command, CommanderError } from "commander";
 import { doctorWorkspace, initWorkspace, resolveWorkspacePaths } from "../config/workspace";
 import { createApprovalStore } from "../missions/approvals";
 import { createCheckpointStore } from "../missions/checkpoints";
+import { createReportService } from "../missions/reports";
 import { createMissionStore, missionFilePath } from "../missions/store";
 import { createToolRegistry } from "../tools/registry";
 import { createToolRunner } from "../tools/runner";
@@ -23,6 +24,7 @@ export const CLI_COMMANDS = [
   "tool",
   "approve",
   "rewind",
+  "report",
   "pause",
   "resume",
   "replay",
@@ -42,6 +44,7 @@ export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
     | "tool"
     | "approve"
     | "rewind"
+    | "report"
     | "doctor"
   > =>
     name !== "init" &&
@@ -54,6 +57,7 @@ export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
     name !== "tool" &&
     name !== "approve" &&
     name !== "rewind" &&
+    name !== "report" &&
     name !== "doctor"
 );
 
@@ -76,14 +80,14 @@ const intro = [
   "Narthynx is a local-first Mission Agent OS.",
   "An AI agent that runs missions, not chats.",
   "",
-  "`narthynx init`, `doctor`, `mission`, `missions`, `open`, `plan`, `timeline`, `tools`, `tool`, `approve`, and `rewind` are available in Phase 7.",
-  "Mission execution, replay, and report actions are not implemented yet."
+  "`narthynx init`, `doctor`, `mission`, `missions`, `open`, `plan`, `timeline`, `tools`, `tool`, `approve`, `rewind`, and `report` are available in Phase 8.",
+  "Mission execution and replay are not implemented yet."
 ].join("\n");
 
 function notImplementedMessage(commandName: string): string {
   return [
-    `Command "narthynx ${commandName}" is not implemented in Phase 7.`,
-    "Phase 7 provides approval-gated filesystem writes and checkpoints."
+    `Command "narthynx ${commandName}" is not implemented in Phase 8.`,
+    "Phase 8 provides deterministic mission report artifacts."
   ].join("\n");
 }
 
@@ -92,6 +96,7 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
   const missionStore = createMissionStore(cwd);
   const approvalStore = createApprovalStore(cwd);
   const checkpointStore = createCheckpointStore(cwd);
+  const reportService = createReportService(cwd);
   const toolRegistry = createToolRegistry();
   const toolRunner = createToolRunner({ cwd, registry: toolRegistry });
   const program = new Command();
@@ -110,9 +115,9 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
     "after",
     [
       "",
-      "Phase 7 status:",
-      "  Workspace init, missions, ledgers, plan graphs, typed tools, approval gates, filesystem writes, and checkpoints are implemented.",
-      "  Mission execution, replay, and report actions still fail honestly until their build phases land."
+      "Phase 8 status:",
+      "  Workspace init, missions, ledgers, plan graphs, typed tools, approval gates, filesystem writes, checkpoints, and reports are implemented.",
+      "  Mission execution and replay still fail honestly until their build phases land."
     ].join("\n")
   );
 
@@ -230,6 +235,7 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
         io.writeOut(`updated: ${mission.updatedAt}\n`);
         io.writeOut(`path: ${missionFilePath(paths.missionsDir, mission.id)}\n`);
         io.writeOut(`plan: narthynx plan ${mission.id}\n`);
+        io.writeOut(`report: narthynx report ${mission.id}\n`);
         io.writeOut(`timeline: narthynx timeline ${mission.id}\n`);
       } catch (error) {
         writeCliError(io, error);
@@ -391,6 +397,21 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
         io.writeOut(`path: ${result.checkpoint.targetPath}\n`);
         io.writeOut(`file rollback: ${result.fileRollback ? "yes" : "no"}\n`);
         io.writeOut(`${result.message}\n`);
+      } catch (error) {
+        writeCliError(io, error);
+      }
+    });
+
+  program
+    .command("report")
+    .description("Generate a deterministic mission report artifact. (Phase 8)")
+    .argument("<mission-id>", "Mission ID")
+    .action(async (missionId: string) => {
+      try {
+        const result = await reportService.generateMissionReport(missionId);
+        io.writeOut(`${result.regenerated ? "Report regenerated" : "Report created"}\n`);
+        io.writeOut(`artifact: ${result.artifact.id}\n`);
+        io.writeOut(`path: ${result.path}\n`);
       } catch (error) {
         writeCliError(io, error);
       }

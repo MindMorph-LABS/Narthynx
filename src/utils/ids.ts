@@ -15,3 +15,7 @@ export function createApprovalId(): string {
 export function createCheckpointId(): string {
   return `c_${randomUUID()}`;
 }
+
+export function createArtifactId(): string {
+  return `art_${randomUUID()}`;
+}

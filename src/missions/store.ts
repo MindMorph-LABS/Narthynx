@@ -145,6 +145,11 @@ export function createMissionStore(cwd = process.cwd()): MissionStore {
         timestamp: parsed.updatedAt
       });
 
+      if (state === "completed" && !hasReportArtifact(parsed)) {
+        const { createReportService } = await import("./reports");
+        await createReportService(paths.rootDir).generateMissionReport(id);
+      }
+
       return parsed;
     },
 
@@ -270,4 +275,15 @@ function normalizeTitle(value: string): string {
 
 function isMissingGraphError(error: unknown): boolean {
   return error instanceof Error && error.message.includes("ENOENT");
+}
+
+function hasReportArtifact(mission: Mission): boolean {
+  return mission.artifacts.some((artifact) => {
+    if (typeof artifact !== "object" || artifact === null) {
+      return false;
+    }
+
+    const value = artifact as { type?: unknown; path?: unknown };
+    return value.type === "report" && value.path === "artifacts/report.md";
+  });
 }

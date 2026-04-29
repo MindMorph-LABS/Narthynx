@@ -7,6 +7,8 @@ import { z } from "zod";
 
 import { loadWorkspacePolicy } from "../config/load";
 import { resolveWorkspacePaths } from "../config/workspace";
+import { createArtifactStore, reportArtifactPath } from "../missions/artifacts";
+import { missionDirectory } from "../missions/store";
 import { resolveGuardedWorkspacePath } from "./path-guard";
 import type { ToolAction } from "./types";
 
@@ -182,8 +184,31 @@ export const builtinTools: ToolAction<unknown, unknown>[] = [
     sideEffect: "local_write",
     requiresApproval: true,
     reversible: false,
-    async run() {
-      throw new Error("report.write is blocked until report generation is implemented in Phase 8.");
+    async run(input, context) {
+      const parsed = reportWriteInputSchema.parse(input);
+      const paths = resolveWorkspacePaths(context.cwd);
+      const normalized = parsed.path.replaceAll("\\", "/");
+
+      if (normalized !== "report.md" && normalized !== "artifacts/report.md") {
+        throw new Error("report.write can only write the mission report artifact: report.md");
+      }
+
+      const filePath = reportArtifactPath(missionDirectory(paths.missionsDir, context.missionId));
+      await mkdir(path.dirname(filePath), { recursive: true });
+      await writeFile(filePath, parsed.content, "utf8");
+      const { artifact } = await createArtifactStore(context.cwd).registerReportArtifact({
+        missionId: context.missionId,
+        title: "Mission report",
+        metadata: {
+          source: "report.write",
+          bytes: Buffer.byteLength(parsed.content, "utf8")
+        }
+      });
+
+      return {
+        path: artifact.path,
+        bytesWritten: Buffer.byteLength(parsed.content, "utf8")
+      };
     }
   }
 ];

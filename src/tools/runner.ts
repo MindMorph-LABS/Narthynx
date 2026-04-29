@@ -114,11 +114,11 @@ export function createToolRunner(options: ToolRunnerOptions = {}) {
         };
       }
 
-      if (approval.toolName !== "filesystem.write") {
+      if (approval.toolName !== "filesystem.write" && approval.toolName !== "report.write") {
         return {
           ok: false,
           toolName: approval.toolName,
-          message: `${approval.toolName} continuation is not implemented in Phase 7.`,
+          message: `${approval.toolName} continuation is not implemented in Phase 8.`,
           blocked: true,
           approvalId
         };
@@ -133,13 +133,15 @@ export function createToolRunner(options: ToolRunnerOptions = {}) {
       }
 
       let checkpointId: string | undefined;
-      try {
-        const checkpoint = await checkpointStore.createFilesystemWriteCheckpoint(approval);
-        checkpointId = checkpoint.id;
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Unknown checkpoint failure";
-        await appendFailed(ledgerPath, { missionId: approval.missionId, toolName: tool.name, input: approval.toolInput }, message);
-        return { ok: false, toolName: tool.name, message, blocked: false, approvalId };
+      if (approval.toolName === "filesystem.write") {
+        try {
+          const checkpoint = await checkpointStore.createFilesystemWriteCheckpoint(approval);
+          checkpointId = checkpoint.id;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Unknown checkpoint failure";
+          await appendFailed(ledgerPath, { missionId: approval.missionId, toolName: tool.name, input: approval.toolInput }, message);
+          return { ok: false, toolName: tool.name, message, blocked: false, approvalId };
+        }
       }
 
       const result = await executeTool({

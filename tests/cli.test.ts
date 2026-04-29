@@ -101,6 +101,7 @@ describe("Narthynx CLI", () => {
     expect(result.stdout).toContain("goal: Prepare launch checklist");
     expect(result.stdout).toContain("success criteria:");
     expect(result.stdout).toContain(`plan: narthynx plan ${id}`);
+    expect(result.stdout).toContain(`report: narthynx report ${id}`);
     expect(result.stdout).toContain(`timeline: narthynx timeline ${id}`);
   });
 
@@ -141,6 +142,34 @@ describe("Narthynx CLI", () => {
     expect(result.stdout).toContain(`Timeline for ${id}`);
     expect(result.stdout).toContain("1.");
     expect(result.stdout).toContain("mission.created");
+  });
+
+  it("generates a mission report from the CLI", async () => {
+    const cwd = await tempWorkspaceRoot();
+    await runCli(["init"], { cwd });
+    const created = await runCli(["mission", "Prepare launch checklist"], { cwd });
+    const id = created.stdout.match(/id: (m_[^\s]+)/)?.[1];
+
+    expect(id).toBeDefined();
+    const result = await runCli(["report", id ?? ""], { cwd });
+    const reportPath = path.join(cwd, ".narthynx", "missions", id ?? "", "artifacts", "report.md");
+    const timeline = await runCli(["timeline", id ?? ""], { cwd });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("Report created");
+    expect(result.stdout).toContain("artifact: art_");
+    expect(result.stdout).toContain(reportPath);
+    await expect(readFile(reportPath, "utf8")).resolves.toContain("## Goal");
+    expect(timeline.stdout).toContain("artifact.created");
+  });
+
+  it("fails clearly for a missing mission report", async () => {
+    const cwd = await tempWorkspaceRoot();
+    await runCli(["init"], { cwd });
+    const result = await runCli(["report", "m_missing"], { cwd });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Failed to read mission at");
   });
 
   it("lists registered typed tools", async () => {
@@ -291,6 +320,28 @@ describe("Narthynx CLI", () => {
     expect(timeline.stdout).toContain("tool.denied");
   });
 
+  it("executes approved report.write under the mission artifacts directory", async () => {
+    const cwd = await tempWorkspaceRoot();
+    await runCli(["init"], { cwd });
+    const created = await runCli(["mission", "Prepare launch checklist"], { cwd });
+    const id = created.stdout.match(/id: (m_[^\s]+)/)?.[1];
+
+    expect(id).toBeDefined();
+    const blocked = await runCli(
+      ["tool", id ?? "", "report.write", "--input", "{\"path\":\"report.md\",\"content\":\"approved report\"}"],
+      { cwd }
+    );
+    const approvalId = blocked.stderr.match(/approve (a_[^\s]+)/)?.[1];
+    const approved = await runCli(["approve", approvalId ?? ""], { cwd });
+    const reportPath = path.join(cwd, ".narthynx", "missions", id ?? "", "artifacts", "report.md");
+
+    expect(approvalId).toBeDefined();
+    expect(approved.exitCode).toBe(0);
+    expect(approved.stdout).toContain("Approved action executed");
+    await expect(readFile(reportPath, "utf8")).resolves.toBe("approved report");
+    await expect(readFile(path.join(cwd, "report.md"), "utf8")).rejects.toThrow();
+  });
+
   it("fails clearly for a missing approval", async () => {
     const cwd = await tempWorkspaceRoot();
     await runCli(["init"], { cwd });
@@ -330,6 +381,6 @@ describe("Narthynx CLI", () => {
     const result = await runCli(["replay", "m_missing"]);
 
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("not implemented in Phase 7");
+    expect(result.stderr).toContain("not implemented in Phase 8");
   });
 });
