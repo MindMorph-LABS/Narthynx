@@ -3,9 +3,11 @@ import { fileURLToPath } from "node:url";
 
 import { Command, CommanderError } from "commander";
 
+import { doctorWorkspace, initWorkspace } from "../config/workspace";
+
 export const VERSION = "0.1.0";
 
-export const PLACEHOLDER_COMMANDS = [
+export const CLI_COMMANDS = [
   "init",
   "mission",
   "missions",
@@ -17,10 +19,19 @@ export const PLACEHOLDER_COMMANDS = [
   "doctor"
 ] as const;
 
+export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
+  (name): name is Exclude<(typeof CLI_COMMANDS)[number], "init" | "doctor"> =>
+    name !== "init" && name !== "doctor"
+);
+
 export interface CliResult {
   exitCode: number;
   stdout: string;
   stderr: string;
+}
+
+export interface CliOptions {
+  cwd?: string;
 }
 
 interface CliIo {
@@ -32,18 +43,19 @@ const intro = [
   "Narthynx is a local-first Mission Agent OS.",
   "An AI agent that runs missions, not chats.",
   "",
-  "The interactive mission runtime is not implemented yet in Phase 0.",
-  "Run `narthynx --help` to see the bootstrap command surface."
+  "`narthynx init` and `narthynx doctor` are available in Phase 1.",
+  "The mission runtime is not implemented yet."
 ].join("\n");
 
 function notImplementedMessage(commandName: string): string {
   return [
-    `Command "narthynx ${commandName}" is not implemented in Phase 0.`,
-    "Phase 0 only provides the CLI foundation, help, version, tests, and open-source project metadata."
+    `Command "narthynx ${commandName}" is not implemented in Phase 1.`,
+    "Phase 1 provides workspace initialization and doctor checks. Mission runtime behavior starts in later phases."
   ].join("\n");
 }
 
-export function createProgram(io: CliIo): Command {
+export function createProgram(io: CliIo, options: CliOptions = {}): Command {
+  const cwd = options.cwd ?? process.cwd();
   const program = new Command();
 
   program
@@ -60,15 +72,55 @@ export function createProgram(io: CliIo): Command {
     "after",
     [
       "",
-      "Phase 0 status:",
-      "  The mission runtime, workspace init, ledgers, approvals, and replay are intentionally not implemented yet.",
-      "  Placeholder commands fail honestly until their build phases land."
+      "Phase 1 status:",
+      "  Workspace init and doctor checks are implemented.",
+      "  Mission creation, ledgers, approvals, replay, and execution still fail honestly until their build phases land."
     ].join("\n")
   );
 
   program.action(() => {
     io.writeOut(`${intro}\n`);
   });
+
+  program
+    .command("init")
+    .description("Initialize a local .narthynx workspace. (Phase 1)")
+    .action(async () => {
+      const result = await initWorkspace(cwd);
+
+      io.writeOut("Narthynx workspace init\n");
+      writePathList(io, "created", result.created);
+      writePathList(io, "preserved", result.preserved);
+
+      if (result.failed.length > 0) {
+        writePathList(io, "failed", result.failed, "err");
+        io.writeErr("Workspace init failed. State was preserved where possible.\n");
+        process.exitCode = 1;
+        return;
+      }
+
+      io.writeOut("Workspace is ready.\n");
+    });
+
+  program
+    .command("doctor")
+    .description("Run workspace health checks. (Phase 1)")
+    .action(async () => {
+      const result = await doctorWorkspace(cwd);
+
+      io.writeOut("Narthynx doctor\n");
+      for (const check of result.checks) {
+        io.writeOut(`${check.ok ? "ok" : "fail"}  ${check.name}: ${check.message}\n`);
+      }
+
+      if (!result.ok) {
+        io.writeErr("Workspace is not healthy. Run: narthynx init\n");
+        process.exitCode = 1;
+        return;
+      }
+
+      io.writeOut("Workspace is healthy.\n");
+    });
 
   program
     .command("mission")
@@ -97,20 +149,23 @@ export function createProgram(io: CliIo): Command {
   return program;
 }
 
-export async function runCli(argv: string[]): Promise<CliResult> {
+export async function runCli(argv: string[], options: CliOptions = {}): Promise<CliResult> {
   let stdout = "";
   let stderr = "";
   const originalExitCode = process.exitCode;
   process.exitCode = undefined;
 
-  const program = createProgram({
-    writeOut: (message) => {
-      stdout += message;
+  const program = createProgram(
+    {
+      writeOut: (message) => {
+        stdout += message;
+      },
+      writeErr: (message) => {
+        stderr += message;
+      }
     },
-    writeErr: (message) => {
-      stderr += message;
-    }
-  });
+    options
+  );
 
   try {
     await program.parseAsync(argv, { from: "user" });
@@ -138,18 +193,28 @@ export async function runCli(argv: string[]): Promise<CliResult> {
 
 function placeholderDescription(commandName: (typeof PLACEHOLDER_COMMANDS)[number]): string {
   const descriptions: Record<(typeof PLACEHOLDER_COMMANDS)[number], string> = {
-    init: "Initialize a local .narthynx workspace. (Phase 1)",
     mission: "Create a mission from a natural-language goal. (Phase 2)",
     missions: "List persisted missions. (Phase 2)",
     open: "Open a persisted mission summary. (Phase 2)",
     approve: "Approve a queued action. (Phase 6)",
     pause: "Pause a mission. (Phase 2)",
     resume: "Resume a mission. (Phase 2)",
-    replay: "Replay a mission ledger. (Phase 9)",
-    doctor: "Run workspace health checks. (Phase 1)"
+    replay: "Replay a mission ledger. (Phase 9)"
   };
 
   return descriptions[commandName];
+}
+
+function writePathList(io: CliIo, label: string, paths: string[], stream: "out" | "err" = "out"): void {
+  if (paths.length === 0) {
+    return;
+  }
+
+  const write = stream === "out" ? io.writeOut : io.writeErr;
+  write(`${label}:\n`);
+  for (const pathValue of paths) {
+    write(`  ${pathValue}\n`);
+  }
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

@@ -11,6 +11,12 @@ importers:
       commander:
         specifier: 12.1.0
         version: 12.1.0
+      yaml:
+        specifier: 2.6.1
+        version: 2.6.1
+      zod:
+        specifier: 3.24.1
+        version: 3.24.1
     devDependencies:
       '@eslint/js':
         specifier: 9.18.0
@@ -1475,6 +1481,9 @@ packages:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}
     engines: {node: '>=10'}
 
+  zod@3.24.1:
+    resolution: {integrity: sha512-muH7gBL9sI1nciMZV67X5fTKKBLtwpZ5VBp1vsOQzj1MhrBZ4wlVCm3gedKZWLp0Oyel8sIGfeiz54Su+OVT+A==}
+
 snapshots:
 
   '@esbuild/aix-ppc64@0.21.5':
@@ -2704,7 +2713,8 @@ snapshots:
 
   word-wrap@1.2.5: {}
 
-  yaml@2.6.1:
-    optional: true
+  yaml@2.6.1: {}
 
   yocto-queue@0.1.0: {}
+
+  zod@3.24.1: {}
