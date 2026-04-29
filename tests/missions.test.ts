@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import YAML from "yaml";
 
 import { initWorkspace } from "../src/config/workspace";
+import { readLedgerEvents } from "../src/missions/ledger";
 import { missionSchema, type Mission } from "../src/missions/schema";
 import { createMissionStore, missionFilePath } from "../src/missions/store";
 import { assertMissionStateTransition, canTransitionMissionState } from "../src/missions/state-machine";
@@ -90,17 +91,20 @@ describe("mission state machine", () => {
 });
 
 describe("mission store", () => {
-  it("creates a mission.yaml file", async () => {
+  it("creates a mission.yaml file and ledger.jsonl", async () => {
     const cwd = await tempWorkspaceRoot();
     await initWorkspace(cwd);
 
     const store = createMissionStore(cwd);
     const mission = await store.createMission({ goal: "Prepare my launch checklist" });
-    const raw = await readFile(path.join(cwd, ".narthynx", "missions", mission.id, "mission.yaml"), "utf8");
+    const missionDir = path.join(cwd, ".narthynx", "missions", mission.id);
+    const raw = await readFile(path.join(missionDir, "mission.yaml"), "utf8");
+    const ledger = await readLedgerEvents(path.join(missionDir, "ledger.jsonl"));
 
     expect(mission.id).toMatch(/^m_/);
     expect(mission.state).toBe("created");
     expect(raw).toContain("Prepare my launch checklist");
+    expect(ledger[0]?.type).toBe("mission.created");
   });
 
   it("reads missions after creating a fresh store instance", async () => {
@@ -145,11 +149,31 @@ describe("mission store", () => {
     const store = createMissionStore(cwd);
     const mission = await store.createMission({ goal: "Prepare my launch checklist" });
     const updated = await store.updateMissionState(mission.id, "planning");
+    const ledger = await store.readMissionLedger(mission.id);
 
     expect(updated.state).toBe("planning");
+    expect(ledger.map((event) => event.type)).toEqual(["mission.created", "mission.state_changed"]);
+    expect(ledger[1]?.details).toEqual({
+      from: "created",
+      to: "planning"
+    });
     await expect(store.updateMissionState(mission.id, "completed")).rejects.toThrow(
       "Invalid mission state transition: planning -> completed"
     );
+  });
+
+  it("reads the same ledger after creating a fresh store instance", async () => {
+    const cwd = await tempWorkspaceRoot();
+    await initWorkspace(cwd);
+
+    const firstStore = createMissionStore(cwd);
+    const mission = await firstStore.createMission({ goal: "Prepare my launch checklist" });
+    await firstStore.updateMissionState(mission.id, "planning");
+
+    const secondStore = createMissionStore(cwd);
+    const ledger = await secondStore.readMissionLedger(mission.id);
+
+    expect(ledger.map((event) => event.type)).toEqual(["mission.created", "mission.state_changed"]);
   });
 
   it("requires an initialized workspace", async () => {

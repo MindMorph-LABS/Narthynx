@@ -5,6 +5,7 @@ import YAML from "yaml";
 
 import { resolveWorkspacePaths } from "../config/workspace";
 import { createMissionId } from "../utils/ids";
+import { appendLedgerEvent, ledgerFilePath, readLedgerEvents, type LedgerEvent } from "./ledger";
 import { missionSchema, type CreateMissionInput, type Mission, type MissionState } from "./schema";
 import { assertMissionStateTransition } from "./state-machine";
 
@@ -15,6 +16,7 @@ export interface MissionStore {
   readMission(id: string): Promise<Mission>;
   listMissions(): Promise<Mission[]>;
   updateMissionState(id: string, state: MissionState): Promise<Mission>;
+  readMissionLedger(id: string, options?: { allowMissing?: boolean }): Promise<LedgerEvent[]>;
 }
 
 export function createMissionStore(cwd = process.cwd()): MissionStore {
@@ -60,6 +62,17 @@ export function createMissionStore(cwd = process.cwd()): MissionStore {
       const missionDir = missionDirectory(paths.missionsDir, parsed.id);
       await mkdir(missionDir, { recursive: true });
       await writeMissionFile(missionDir, parsed);
+      await appendLedgerEvent(ledgerFilePath(missionDir), {
+        missionId: parsed.id,
+        type: "mission.created",
+        summary: `Mission created: ${parsed.title}`,
+        details: {
+          title: parsed.title,
+          goal: parsed.goal,
+          state: parsed.state
+        },
+        timestamp: parsed.createdAt
+      });
 
       return parsed;
     },
@@ -85,6 +98,7 @@ export function createMissionStore(cwd = process.cwd()): MissionStore {
     async updateMissionState(id, state) {
       const mission = await this.readMission(id);
       assertMissionStateTransition(mission.state, state);
+      const previousState = mission.state;
 
       const updated: Mission = {
         ...mission,
@@ -93,9 +107,25 @@ export function createMissionStore(cwd = process.cwd()): MissionStore {
       };
 
       const parsed = missionSchema.parse(updated);
-      await writeMissionFile(missionDirectory(paths.missionsDir, id), parsed);
+      const missionDir = missionDirectory(paths.missionsDir, id);
+      await writeMissionFile(missionDir, parsed);
+      await appendLedgerEvent(ledgerFilePath(missionDir), {
+        missionId: parsed.id,
+        type: "mission.state_changed",
+        summary: `Mission state changed: ${previousState} -> ${state}`,
+        details: {
+          from: previousState,
+          to: state
+        },
+        timestamp: parsed.updatedAt
+      });
 
       return parsed;
+    },
+
+    async readMissionLedger(id, options = {}) {
+      await this.readMission(id);
+      return readLedgerEvents(ledgerFilePath(missionDirectory(paths.missionsDir, id)), options);
     }
   };
 }

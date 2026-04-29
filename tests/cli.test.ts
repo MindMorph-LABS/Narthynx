@@ -68,6 +68,11 @@ describe("Narthynx CLI", () => {
     expect(result.stdout).toContain("Mission created");
     expect(result.stdout).toContain("id: m_");
     expect(result.stdout).toContain("state: created");
+    const id = result.stdout.match(/id: (m_[^\s]+)/)?.[1];
+    expect(id).toBeDefined();
+    await expect(readFile(path.join(cwd, ".narthynx", "missions", id ?? "", "ledger.jsonl"), "utf8")).resolves.toContain(
+      "mission.created"
+    );
   });
 
   it("lists missions across separate CLI calls", async () => {
@@ -95,6 +100,31 @@ describe("Narthynx CLI", () => {
     expect(result.stdout).toContain(`Mission ${id}`);
     expect(result.stdout).toContain("goal: Prepare launch checklist");
     expect(result.stdout).toContain("success criteria:");
+    expect(result.stdout).toContain(`timeline: narthynx timeline ${id}`);
+  });
+
+  it("prints a mission timeline", async () => {
+    const cwd = await tempWorkspaceRoot();
+    await runCli(["init"], { cwd });
+    const created = await runCli(["mission", "Prepare launch checklist"], { cwd });
+    const id = created.stdout.match(/id: (m_[^\s]+)/)?.[1];
+
+    expect(id).toBeDefined();
+    const result = await runCli(["timeline", id ?? ""], { cwd });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain(`Timeline for ${id}`);
+    expect(result.stdout).toContain("1.");
+    expect(result.stdout).toContain("mission.created");
+  });
+
+  it("fails clearly for a missing mission timeline", async () => {
+    const cwd = await tempWorkspaceRoot();
+    await runCli(["init"], { cwd });
+    const result = await runCli(["timeline", "m_missing"], { cwd });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Failed to read mission at");
   });
 
   it("requires a mission goal", async () => {
@@ -118,6 +148,6 @@ describe("Narthynx CLI", () => {
     const result = await runCli(["replay", "m_missing"]);
 
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("not implemented in Phase 2");
+    expect(result.stderr).toContain("not implemented in Phase 3");
   });
 });

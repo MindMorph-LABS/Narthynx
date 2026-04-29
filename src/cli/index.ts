@@ -13,6 +13,7 @@ export const CLI_COMMANDS = [
   "mission",
   "missions",
   "open",
+  "timeline",
   "approve",
   "pause",
   "resume",
@@ -21,8 +22,16 @@ export const CLI_COMMANDS = [
 ] as const;
 
 export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
-  (name): name is Exclude<(typeof CLI_COMMANDS)[number], "init" | "mission" | "missions" | "open" | "doctor"> =>
-    name !== "init" && name !== "mission" && name !== "missions" && name !== "open" && name !== "doctor"
+  (name): name is Exclude<
+    (typeof CLI_COMMANDS)[number],
+    "init" | "mission" | "missions" | "open" | "timeline" | "doctor"
+  > =>
+    name !== "init" &&
+    name !== "mission" &&
+    name !== "missions" &&
+    name !== "open" &&
+    name !== "timeline" &&
+    name !== "doctor"
 );
 
 export interface CliResult {
@@ -44,14 +53,14 @@ const intro = [
   "Narthynx is a local-first Mission Agent OS.",
   "An AI agent that runs missions, not chats.",
   "",
-  "`narthynx init`, `doctor`, `mission`, `missions`, and `open` are available in Phase 2.",
-  "Planning, ledgers, approvals, replay, and execution are not implemented yet."
+  "`narthynx init`, `doctor`, `mission`, `missions`, `open`, and `timeline` are available in Phase 3.",
+  "Planning, approvals, replay, and execution are not implemented yet."
 ].join("\n");
 
 function notImplementedMessage(commandName: string): string {
   return [
-    `Command "narthynx ${commandName}" is not implemented in Phase 2.`,
-    "Phase 2 provides mission schema, file persistence, listing, and opening. Execution behavior starts in later phases."
+    `Command "narthynx ${commandName}" is not implemented in Phase 3.`,
+    "Phase 3 provides mission persistence and append-only ledgers. Execution behavior starts in later phases."
   ].join("\n");
 }
 
@@ -74,9 +83,9 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
     "after",
     [
       "",
-      "Phase 2 status:",
-      "  Workspace init, doctor checks, mission creation, mission listing, and mission opening are implemented.",
-      "  Planning, ledgers, approvals, replay, and execution still fail honestly until their build phases land."
+      "Phase 3 status:",
+      "  Workspace init, doctor checks, mission persistence, and append-only ledger timelines are implemented.",
+      "  Planning, approvals, replay, and execution still fail honestly until their build phases land."
     ].join("\n")
   );
 
@@ -193,6 +202,30 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
         io.writeOut(`created: ${mission.createdAt}\n`);
         io.writeOut(`updated: ${mission.updatedAt}\n`);
         io.writeOut(`path: ${missionFilePath(paths.missionsDir, mission.id)}\n`);
+        io.writeOut(`timeline: narthynx timeline ${mission.id}\n`);
+      } catch (error) {
+        writeCliError(io, error);
+      }
+    });
+
+  program
+    .command("timeline")
+    .description("Show a mission action ledger. (Phase 3)")
+    .argument("<id>", "Mission ID")
+    .action(async (id: string) => {
+      try {
+        await missionStore.readMission(id);
+        const events = await missionStore.readMissionLedger(id, { allowMissing: true });
+
+        if (events.length === 0) {
+          io.writeOut(`No ledger events found for mission ${id}.\n`);
+          return;
+        }
+
+        io.writeOut(`Timeline for ${id}\n`);
+        for (const [index, event] of events.entries()) {
+          io.writeOut(`${index + 1}. ${event.timestamp}  ${event.type}  ${event.summary}\n`);
+        }
       } catch (error) {
         writeCliError(io, error);
       }
