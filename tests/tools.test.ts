@@ -4,6 +4,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { defaultPolicyYaml } from "../src/config/defaults";
 import { initWorkspace } from "../src/config/workspace";
 import { createMissionStore } from "../src/missions/store";
 import { createToolRegistry } from "../src/tools/registry";
@@ -128,7 +129,7 @@ describe("tool runner", () => {
     }
   }, 15_000);
 
-  it("blocks approval-required tools without writing files or approval events", async () => {
+  it("creates a pending approval for approval-required tools without writing files", async () => {
     const { cwd, store, mission } = await initializedMission();
     const runner = createToolRunner({ cwd });
     const result = await runner.runTool({
@@ -141,11 +142,39 @@ describe("tool runner", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.blocked).toBe(true);
-      expect(result.message).toContain("Phase 6");
+      expect(result.approvalId).toMatch(/^a_/);
+      expect(result.message).toContain("narthynx approve");
     }
     await expect(readFile(path.join(cwd, "report.md"), "utf8")).rejects.toThrow();
-    expect(ledger.map((event) => event.type)).not.toContain("tool.approved");
-    expect(ledger.at(-1)?.type).toBe("tool.failed");
+    expect(ledger.map((event) => event.type)).not.toContain("tool.started");
+    expect(ledger.at(-1)?.type).toBe("tool.denied");
+    expect(ledger.at(-1)?.details).toMatchObject({
+      status: "pending_approval"
+    });
+  }, 15_000);
+
+  it("blocks policy-denied tools without creating approvals", async () => {
+    const { cwd, store, mission } = await initializedMission();
+    await writeFile(path.join(cwd, ".narthynx", "policy.yaml"), defaultPolicyYaml().replace("mode: ask", "mode: safe"), "utf8");
+    const runner = createToolRunner({ cwd });
+    const result = await runner.runTool({
+      missionId: mission.id,
+      toolName: "report.write",
+      input: { path: "report.md", content: "report" }
+    });
+    const ledger = await store.readMissionLedger(mission.id);
+    const updatedMission = await store.readMission(mission.id);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.message).toContain("Safe mode");
+      expect(result.approvalId).toBeUndefined();
+    }
+    expect(updatedMission.approvals).toEqual([]);
+    expect(ledger.at(-1)?.type).toBe("tool.denied");
+    expect(ledger.at(-1)?.details).toMatchObject({
+      status: "blocked"
+    });
   }, 15_000);
 
   it("records invalid input as a tool failure before execution", async () => {

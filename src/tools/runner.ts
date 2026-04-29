@@ -1,8 +1,11 @@
 import type { z } from "zod";
 
+import { loadWorkspacePolicy } from "../config/load";
 import { resolveWorkspacePaths } from "../config/workspace";
+import { createApprovalStore } from "../missions/approvals";
 import { appendLedgerEvent, ledgerFilePath } from "../missions/ledger";
 import { createMissionStore, missionDirectory } from "../missions/store";
+import { classifyToolPolicy } from "./policy";
 import { createToolRegistry, type ToolRegistry } from "./registry";
 import type { ToolRunRequest, ToolRunResult } from "./types";
 
@@ -15,6 +18,7 @@ export function createToolRunner(options: ToolRunnerOptions = {}) {
   const cwd = options.cwd ?? process.cwd();
   const registry = options.registry ?? createToolRegistry();
   const missionStore = createMissionStore(cwd);
+  const approvalStore = createApprovalStore(cwd);
   const paths = resolveWorkspacePaths(cwd);
 
   return {
@@ -47,10 +51,31 @@ export function createToolRunner(options: ToolRunnerOptions = {}) {
         return { ok: false, toolName: tool.name, message, blocked: false };
       }
 
-      if (tool.requiresApproval) {
-        const message = `${tool.name} requires approval. Approval gates are not implemented until Phase 6.`;
-        await appendFailed(ledgerPath, request, message, true);
-        return { ok: false, toolName: tool.name, message, blocked: true };
+      const policy = await loadWorkspacePolicy(paths.policyFile);
+      if (!policy.ok) {
+        const message = `policy.yaml invalid: ${policy.message}`;
+        await appendFailed(ledgerPath, request, message);
+        return { ok: false, toolName: tool.name, message, blocked: false };
+      }
+
+      const decision = classifyToolPolicy(tool, policy.value);
+      if (decision.action === "block") {
+        await appendDenied(ledgerPath, request, decision.reason, "blocked");
+        return { ok: false, toolName: tool.name, message: decision.reason, blocked: true };
+      }
+
+      if (decision.action === "approval") {
+        const approval = await approvalStore.createApproval({
+          missionId: request.missionId,
+          toolName: tool.name,
+          toolInput: input.data,
+          riskLevel: decision.riskLevel,
+          sideEffect: tool.sideEffect,
+          reason: decision.reason
+        });
+        const message = `${tool.name} requires approval. Run: narthynx approve ${approval.id}`;
+        await appendDenied(ledgerPath, request, message, "pending_approval", approval.id);
+        return { ok: false, toolName: tool.name, message, blocked: true, approvalId: approval.id };
       }
 
       await appendLedgerEvent(ledgerPath, {
@@ -114,6 +139,26 @@ async function appendFailed(
       toolName: request.toolName,
       message,
       blocked
+    }
+  });
+}
+
+async function appendDenied(
+  ledgerPath: string,
+  request: ToolRunRequest,
+  message: string,
+  status: "blocked" | "pending_approval",
+  approvalId?: string
+): Promise<void> {
+  await appendLedgerEvent(ledgerPath, {
+    missionId: request.missionId,
+    type: "tool.denied",
+    summary: status === "pending_approval" ? `Tool pending approval: ${request.toolName}` : `Tool denied: ${request.toolName}`,
+    details: {
+      toolName: request.toolName,
+      message,
+      status,
+      approvalId
     }
   });
 }

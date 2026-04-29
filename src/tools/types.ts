@@ -38,6 +38,7 @@ export type ToolRunResult =
       toolName: string;
       message: string;
       blocked: boolean;
+      approvalId?: string;
     };
 
 export class ToolError extends Error {
