@@ -5,6 +5,7 @@ import { Command, CommanderError } from "commander";
 
 import { doctorWorkspace, initWorkspace, resolveWorkspacePaths } from "../config/workspace";
 import { createApprovalStore } from "../missions/approvals";
+import { createCheckpointStore } from "../missions/checkpoints";
 import { createMissionStore, missionFilePath } from "../missions/store";
 import { createToolRegistry } from "../tools/registry";
 import { createToolRunner } from "../tools/runner";
@@ -21,6 +22,7 @@ export const CLI_COMMANDS = [
   "tools",
   "tool",
   "approve",
+  "rewind",
   "pause",
   "resume",
   "replay",
@@ -30,7 +32,17 @@ export const CLI_COMMANDS = [
 export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
   (name): name is Exclude<
     (typeof CLI_COMMANDS)[number],
-    "init" | "mission" | "missions" | "open" | "plan" | "timeline" | "tools" | "tool" | "approve" | "doctor"
+    | "init"
+    | "mission"
+    | "missions"
+    | "open"
+    | "plan"
+    | "timeline"
+    | "tools"
+    | "tool"
+    | "approve"
+    | "rewind"
+    | "doctor"
   > =>
     name !== "init" &&
     name !== "mission" &&
@@ -41,6 +53,7 @@ export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
     name !== "tools" &&
     name !== "tool" &&
     name !== "approve" &&
+    name !== "rewind" &&
     name !== "doctor"
 );
 
@@ -63,14 +76,14 @@ const intro = [
   "Narthynx is a local-first Mission Agent OS.",
   "An AI agent that runs missions, not chats.",
   "",
-  "`narthynx init`, `doctor`, `mission`, `missions`, `open`, `plan`, `timeline`, `tools`, `tool`, and `approve` are available in Phase 6.",
-  "Mission execution, replay, checkpoints, and write/report actions are not implemented yet."
+  "`narthynx init`, `doctor`, `mission`, `missions`, `open`, `plan`, `timeline`, `tools`, `tool`, `approve`, and `rewind` are available in Phase 7.",
+  "Mission execution, replay, and report actions are not implemented yet."
 ].join("\n");
 
 function notImplementedMessage(commandName: string): string {
   return [
-    `Command "narthynx ${commandName}" is not implemented in Phase 6.`,
-    "Phase 6 provides policy-aware approval gates and durable approval decisions."
+    `Command "narthynx ${commandName}" is not implemented in Phase 7.`,
+    "Phase 7 provides approval-gated filesystem writes and checkpoints."
   ].join("\n");
 }
 
@@ -78,6 +91,7 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
   const cwd = options.cwd ?? process.cwd();
   const missionStore = createMissionStore(cwd);
   const approvalStore = createApprovalStore(cwd);
+  const checkpointStore = createCheckpointStore(cwd);
   const toolRegistry = createToolRegistry();
   const toolRunner = createToolRunner({ cwd, registry: toolRegistry });
   const program = new Command();
@@ -96,9 +110,9 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
     "after",
     [
       "",
-      "Phase 6 status:",
-      "  Workspace init, missions, ledgers, plan graphs, typed tools, and approval gates are implemented.",
-      "  Mission execution, replay, checkpoints, and write/report actions still fail honestly until their build phases land."
+      "Phase 7 status:",
+      "  Workspace init, missions, ledgers, plan graphs, typed tools, approval gates, filesystem writes, and checkpoints are implemented.",
+      "  Mission execution, replay, and report actions still fail honestly until their build phases land."
     ].join("\n")
   );
 
@@ -342,10 +356,41 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
         io.writeOut(`mission: ${approval.missionId}\n`);
         io.writeOut(`tool: ${approval.toolName}\n`);
         if (approval.status === "approved") {
-          io.writeOut("Recorded approval. Tool execution remains paused until a later phase resumes approved actions.\n");
+          const continuation = await toolRunner.runApprovedTool(approval.id);
+          if (continuation.ok) {
+            io.writeOut("Approved action executed.\n");
+            if (continuation.checkpointId) {
+              io.writeOut(`checkpoint: ${continuation.checkpointId}\n`);
+            }
+            io.writeOut(`${JSON.stringify(continuation.output, null, 2)}\n`);
+            return;
+          }
+
+          io.writeOut(`${continuation.message}\n`);
+          if (approval.toolName === "filesystem.write") {
+            process.exitCode = 1;
+          }
         } else {
           io.writeOut("Recorded denial. The action was not executed.\n");
         }
+      } catch (error) {
+        writeCliError(io, error);
+      }
+    });
+
+  program
+    .command("rewind")
+    .description("Restore a filesystem checkpoint. (Phase 7)")
+    .argument("<mission-id>", "Mission ID")
+    .argument("<checkpoint-id>", "Checkpoint ID")
+    .action(async (missionId: string, checkpointId: string) => {
+      try {
+        await missionStore.readMission(missionId);
+        const result = await checkpointStore.rewindCheckpoint(missionId, checkpointId);
+        io.writeOut(`Checkpoint rewound: ${result.checkpoint.id}\n`);
+        io.writeOut(`path: ${result.checkpoint.targetPath}\n`);
+        io.writeOut(`file rollback: ${result.fileRollback ? "yes" : "no"}\n`);
+        io.writeOut(`${result.message}\n`);
       } catch (error) {
         writeCliError(io, error);
       }

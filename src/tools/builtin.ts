@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
-import { readFile, readdir, stat } from "node:fs/promises";
+import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { promisify } from "node:util";
 
 import { z } from "zod";
@@ -28,6 +29,16 @@ const filesystemListOutputSchema = z.object({
 const filesystemReadOutputSchema = z.object({
   path: z.string(),
   content: z.string()
+});
+
+const filesystemWriteInputSchema = z.object({
+  path: z.string().min(1),
+  content: z.string()
+});
+
+const filesystemWriteOutputSchema = z.object({
+  path: z.string(),
+  bytesWritten: z.number().int().nonnegative()
 });
 
 const gitStatusInputSchema = z.object({});
@@ -103,6 +114,34 @@ export const builtinTools: ToolAction<unknown, unknown>[] = [
     }
   },
   {
+    name: "filesystem.write",
+    description: "Write a local workspace file after explicit approval and checkpoint creation.",
+    inputSchema: filesystemWriteInputSchema,
+    outputSchema: filesystemWriteOutputSchema,
+    riskLevel: "high",
+    sideEffect: "local_write",
+    requiresApproval: true,
+    reversible: false,
+    async run(input, context) {
+      const parsed = filesystemWriteInputSchema.parse(input);
+      const policy = await loadPolicyOrThrow(context.cwd);
+      const guarded = resolveGuardedWorkspacePath(context.cwd, parsed.path, policy);
+      const existing = await stat(guarded.absolutePath).catch(() => undefined);
+
+      if (existing?.isDirectory()) {
+        throw new Error(`Path is a directory and cannot be written as a file: ${parsed.path}`);
+      }
+
+      await mkdir(path.dirname(guarded.absolutePath), { recursive: true });
+      await writeFile(guarded.absolutePath, parsed.content, "utf8");
+
+      return {
+        path: guarded.relativePath,
+        bytesWritten: Buffer.byteLength(parsed.content, "utf8")
+      };
+    }
+  },
+  {
     name: "git.status",
     description: "Read local git status without running a shell.",
     inputSchema: gitStatusInputSchema,
@@ -136,7 +175,7 @@ export const builtinTools: ToolAction<unknown, unknown>[] = [
   },
   {
     name: "report.write",
-    description: "Write a local mission report after approval gates exist.",
+    description: "Write a local mission report after report generation exists.",
     inputSchema: reportWriteInputSchema,
     outputSchema: reportWriteOutputSchema,
     riskLevel: "medium",
@@ -144,7 +183,7 @@ export const builtinTools: ToolAction<unknown, unknown>[] = [
     requiresApproval: true,
     reversible: false,
     async run() {
-      throw new Error("report.write is blocked until approval gates are implemented in Phase 6.");
+      throw new Error("report.write is blocked until report generation is implemented in Phase 8.");
     }
   }
 ];

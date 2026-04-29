@@ -3,6 +3,7 @@ import type { z } from "zod";
 import { loadWorkspacePolicy } from "../config/load";
 import { resolveWorkspacePaths } from "../config/workspace";
 import { createApprovalStore } from "../missions/approvals";
+import { createCheckpointStore } from "../missions/checkpoints";
 import { appendLedgerEvent, ledgerFilePath } from "../missions/ledger";
 import { createMissionStore, missionDirectory } from "../missions/store";
 import { classifyToolPolicy } from "./policy";
@@ -19,6 +20,7 @@ export function createToolRunner(options: ToolRunnerOptions = {}) {
   const registry = options.registry ?? createToolRegistry();
   const missionStore = createMissionStore(cwd);
   const approvalStore = createApprovalStore(cwd);
+  const checkpointStore = createCheckpointStore(cwd);
   const paths = resolveWorkspacePaths(cwd);
 
   return {
@@ -78,51 +80,146 @@ export function createToolRunner(options: ToolRunnerOptions = {}) {
         return { ok: false, toolName: tool.name, message, blocked: true, approvalId: approval.id };
       }
 
-      await appendLedgerEvent(ledgerPath, {
+      return executeTool({
+        cwd,
+        ledgerPath,
         missionId: request.missionId,
-        type: "tool.started",
-        summary: `Tool started: ${tool.name}`,
-        details: {
+        tool,
+        input: input.data,
+        request
+      });
+    },
+
+    async runApprovedTool(approvalId: string): Promise<ToolRunResult> {
+      const approval = await approvalStore.getApproval(approvalId);
+      await missionStore.readMission(approval.missionId);
+      const ledgerPath = ledgerFilePath(missionDirectory(paths.missionsDir, approval.missionId));
+
+      if (approval.status !== "approved") {
+        return {
+          ok: false,
+          toolName: approval.toolName,
+          message: `Approval ${approvalId} is ${approval.status}, not approved.`,
+          blocked: true
+        };
+      }
+
+      if (approval.executedAt) {
+        return {
+          ok: false,
+          toolName: approval.toolName,
+          message: `Approval ${approvalId} has already been executed.`,
+          blocked: true,
+          approvalId
+        };
+      }
+
+      if (approval.toolName !== "filesystem.write") {
+        return {
+          ok: false,
+          toolName: approval.toolName,
+          message: `${approval.toolName} continuation is not implemented in Phase 7.`,
+          blocked: true,
+          approvalId
+        };
+      }
+
+      const tool = registry.get(approval.toolName);
+      const input = tool.inputSchema.safeParse(approval.toolInput);
+      if (!input.success) {
+        const message = `Invalid approved input for ${tool.name}: ${formatZodError(input.error)}`;
+        await appendFailed(ledgerPath, { missionId: approval.missionId, toolName: tool.name, input: approval.toolInput }, message);
+        return { ok: false, toolName: tool.name, message, blocked: false, approvalId };
+      }
+
+      let checkpointId: string | undefined;
+      try {
+        const checkpoint = await checkpointStore.createFilesystemWriteCheckpoint(approval);
+        checkpointId = checkpoint.id;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown checkpoint failure";
+        await appendFailed(ledgerPath, { missionId: approval.missionId, toolName: tool.name, input: approval.toolInput }, message);
+        return { ok: false, toolName: tool.name, message, blocked: false, approvalId };
+      }
+
+      const result = await executeTool({
+        cwd,
+        ledgerPath,
+        missionId: approval.missionId,
+        tool,
+        input: input.data,
+        request: {
+          missionId: approval.missionId,
           toolName: tool.name,
-          sideEffect: tool.sideEffect,
-          riskLevel: tool.riskLevel
-        }
+          input: approval.toolInput
+        },
+        checkpointId
       });
 
-      try {
-        const rawOutput = await tool.run(input.data, {
-          cwd,
-          missionId: request.missionId
-        });
-        const output = tool.outputSchema.safeParse(rawOutput);
-
-        if (!output.success) {
-          const message = `Invalid output for ${tool.name}: ${formatZodError(output.error)}`;
-          await appendFailed(ledgerPath, request, message);
-          return { ok: false, toolName: tool.name, message, blocked: false };
-        }
-
-        await appendLedgerEvent(ledgerPath, {
-          missionId: request.missionId,
-          type: "tool.completed",
-          summary: `Tool completed: ${tool.name}`,
-          details: {
-            toolName: tool.name
-          }
-        });
-
-        return {
-          ok: true,
-          toolName: tool.name,
-          output: output.data
-        };
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Unknown tool runtime failure";
-        await appendFailed(ledgerPath, request, message);
-        return { ok: false, toolName: tool.name, message, blocked: false };
+      if (result.ok) {
+        await approvalStore.markApprovalExecuted(approvalId, checkpointId);
       }
+
+      return result;
     }
   };
+}
+
+async function executeTool(input: {
+  cwd: string;
+  ledgerPath: string;
+  missionId: string;
+  tool: ReturnType<ToolRegistry["get"]>;
+  input: unknown;
+  request: ToolRunRequest;
+  checkpointId?: string;
+}): Promise<ToolRunResult> {
+  await appendLedgerEvent(input.ledgerPath, {
+    missionId: input.missionId,
+    type: "tool.started",
+    summary: `Tool started: ${input.tool.name}`,
+    details: {
+      toolName: input.tool.name,
+      sideEffect: input.tool.sideEffect,
+      riskLevel: input.tool.riskLevel,
+      checkpointId: input.checkpointId
+    }
+  });
+
+  try {
+    const rawOutput = await input.tool.run(input.input, {
+      cwd: input.cwd,
+      missionId: input.missionId
+    });
+    const output = input.tool.outputSchema.safeParse(rawOutput);
+
+    if (!output.success) {
+      const message = `Invalid output for ${input.tool.name}: ${formatZodError(output.error)}`;
+      await appendFailed(input.ledgerPath, input.request, message);
+      return { ok: false, toolName: input.tool.name, message, blocked: false };
+    }
+
+    await appendLedgerEvent(input.ledgerPath, {
+      missionId: input.missionId,
+      type: "tool.completed",
+      summary: `Tool completed: ${input.tool.name}`,
+      details: {
+        toolName: input.tool.name,
+        checkpointId: input.checkpointId
+      }
+    });
+
+    return {
+      ok: true,
+      toolName: input.tool.name,
+      output: output.data,
+      checkpointId: input.checkpointId
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown tool runtime failure";
+    await appendFailed(input.ledgerPath, input.request, message);
+    return { ok: false, toolName: input.tool.name, message, blocked: false };
+  }
 }
 
 async function appendFailed(

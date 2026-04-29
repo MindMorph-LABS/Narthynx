@@ -27,7 +27,9 @@ export const approvalRequestSchema = z.object({
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
   decidedAt: z.string().datetime().optional(),
-  decisionReason: z.string().min(1).optional()
+  decisionReason: z.string().min(1).optional(),
+  executedAt: z.string().datetime().optional(),
+  checkpointId: z.string().regex(/^c_[a-z0-9_-]+$/).optional()
 });
 
 export type ApprovalStatus = z.infer<typeof approvalStatusSchema>;
@@ -45,9 +47,11 @@ export interface CreateApprovalInput {
 
 export interface ApprovalStore {
   createApproval(input: CreateApprovalInput): Promise<ApprovalRequest>;
+  getApproval(id: string): Promise<ApprovalRequest>;
   listMissionApprovals(missionId: string, options?: { allowMissing?: boolean }): Promise<ApprovalRequest[]>;
   listPendingApprovals(): Promise<ApprovalRequest[]>;
   decideApproval(id: string, decision: "approved" | "denied", reason?: string): Promise<ApprovalRequest>;
+  markApprovalExecuted(id: string, checkpointId?: string): Promise<ApprovalRequest>;
 }
 
 export function approvalsFilePath(missionDir: string): string {
@@ -84,6 +88,15 @@ export function createApprovalStore(cwd = process.cwd()): ApprovalStore {
 
     async listMissionApprovals(missionId, options = {}) {
       return readApprovals(approvalsFilePath(missionDirectory(paths.missionsDir, missionId)), options);
+    },
+
+    async getApproval(id) {
+      const found = await findApprovalById(paths.missionsDir, id);
+      if (!found) {
+        throw new Error(`Approval not found: ${id}`);
+      }
+
+      return found.approval;
     },
 
     async listPendingApprovals() {
@@ -138,6 +151,36 @@ export function createApprovalStore(cwd = process.cwd()): ApprovalStore {
         },
         timestamp: now
       });
+
+      return updated;
+    },
+
+    async markApprovalExecuted(id, checkpointId) {
+      const found = await findApprovalById(paths.missionsDir, id);
+      if (!found) {
+        throw new Error(`Approval not found: ${id}`);
+      }
+
+      const { missionId, approvals, approval } = found;
+      if (approval.status !== "approved") {
+        throw new Error(`Approval ${id} is ${approval.status}, not approved.`);
+      }
+
+      if (approval.executedAt) {
+        return approval;
+      }
+
+      const now = new Date().toISOString();
+      const updated = approvalRequestSchema.parse({
+        ...approval,
+        updatedAt: now,
+        executedAt: now,
+        checkpointId
+      });
+      const nextApprovals = approvals.map((candidate) => (candidate.id === id ? updated : candidate));
+
+      await writeApprovals(paths.missionsDir, missionId, nextApprovals);
+      await mirrorMissionApprovals(paths.missionsDir, missionId, nextApprovals);
 
       return updated;
     }

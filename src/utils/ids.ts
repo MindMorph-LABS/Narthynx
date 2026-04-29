@@ -11,3 +11,7 @@ export function createLedgerEventId(): string {
 export function createApprovalId(): string {
   return `a_${randomUUID()}`;
 }
+
+export function createCheckpointId(): string {
+  return `c_${randomUUID()}`;
+}

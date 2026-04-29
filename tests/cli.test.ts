@@ -149,6 +149,7 @@ describe("Narthynx CLI", () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("filesystem.list");
     expect(result.stdout).toContain("filesystem.read");
+    expect(result.stdout).toContain("filesystem.write");
     expect(result.stdout).toContain("git.status");
     expect(result.stdout).toContain("report.write");
   });
@@ -225,6 +226,50 @@ describe("Narthynx CLI", () => {
     expect(timeline.stdout).toContain("tool.approved");
   });
 
+  it("approves filesystem.write, writes with a checkpoint, and rewinds the file", async () => {
+    const cwd = await tempWorkspaceRoot();
+    await runCli(["init"], { cwd });
+    const created = await runCli(["mission", "Prepare launch checklist"], { cwd });
+    const id = created.stdout.match(/id: (m_[^\s]+)/)?.[1];
+
+    expect(id).toBeDefined();
+    const blocked = await runCli(
+      ["tool", id ?? "", "filesystem.write", "--input", "{\"path\":\"launch.md\",\"content\":\"ready\\n\"}"],
+      { cwd }
+    );
+    const approvalId = blocked.stderr.match(/approve (a_[^\s]+)/)?.[1];
+    const approved = await runCli(["approve", approvalId ?? ""], { cwd });
+    const checkpointId = approved.stdout.match(/checkpoint: (c_[^\s]+)/)?.[1];
+    const timelineAfterWrite = await runCli(["timeline", id ?? ""], { cwd });
+    const contentAfterWrite = await readFile(path.join(cwd, "launch.md"), "utf8");
+    const rewound = await runCli(["rewind", id ?? "", checkpointId ?? ""], { cwd });
+    const timelineAfterRewind = await runCli(["timeline", id ?? ""], { cwd });
+
+    expect(approvalId).toBeDefined();
+    expect(blocked.exitCode).toBe(1);
+    expect(contentAfterWrite).toBe("ready\n");
+    expect(approved.exitCode).toBe(0);
+    expect(approved.stdout).toContain("Approved action executed");
+    expect(checkpointId).toBeDefined();
+    expect(timelineAfterWrite.stdout).toContain("checkpoint.created");
+    expect(timelineAfterWrite.stdout).toContain("tool.completed");
+    expect(rewound.exitCode).toBe(0);
+    expect(rewound.stdout).toContain("file rollback: yes");
+    await expect(readFile(path.join(cwd, "launch.md"), "utf8")).rejects.toThrow();
+    expect(timelineAfterRewind.stdout).toContain("Checkpoint rewound");
+  });
+
+  it("fails clearly for a missing checkpoint rewind", async () => {
+    const cwd = await tempWorkspaceRoot();
+    await runCli(["init"], { cwd });
+    const created = await runCli(["mission", "Prepare launch checklist"], { cwd });
+    const id = created.stdout.match(/id: (m_[^\s]+)/)?.[1];
+    const result = await runCli(["rewind", id ?? "", "c_missing"], { cwd });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Failed to read checkpoint at");
+  });
+
   it("denies pending approvals from the CLI", async () => {
     const cwd = await tempWorkspaceRoot();
     await runCli(["init"], { cwd });
@@ -285,6 +330,6 @@ describe("Narthynx CLI", () => {
     const result = await runCli(["replay", "m_missing"]);
 
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("not implemented in Phase 6");
+    expect(result.stderr).toContain("not implemented in Phase 7");
   });
 });

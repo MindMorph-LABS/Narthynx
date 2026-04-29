@@ -32,6 +32,7 @@ export type ToolRunResult =
       ok: true;
       toolName: string;
       output: unknown;
+      checkpointId?: string;
     }
   | {
       ok: false;

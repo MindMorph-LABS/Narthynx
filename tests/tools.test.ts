@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { defaultPolicyYaml } from "../src/config/defaults";
 import { initWorkspace } from "../src/config/workspace";
+import { createApprovalStore } from "../src/missions/approvals";
 import { createMissionStore } from "../src/missions/store";
 import { createToolRegistry } from "../src/tools/registry";
 import { createToolRunner } from "../src/tools/runner";
@@ -36,11 +37,15 @@ describe("tool registry", () => {
     expect(tools.map((tool) => tool.name)).toEqual([
       "filesystem.list",
       "filesystem.read",
+      "filesystem.write",
       "git.status",
       "report.write"
     ]);
     expect(tools.map((tool) => `${tool.name}:${tool.sideEffect}:${tool.riskLevel}:${tool.requiresApproval}`)).toContain(
       "report.write:local_write:medium:true"
+    );
+    expect(tools.map((tool) => `${tool.name}:${tool.sideEffect}:${tool.riskLevel}:${tool.requiresApproval}`)).toContain(
+      "filesystem.write:local_write:high:true"
     );
   });
 
@@ -151,6 +156,105 @@ describe("tool runner", () => {
     expect(ledger.at(-1)?.details).toMatchObject({
       status: "pending_approval"
     });
+  }, 15_000);
+
+  it("creates a pending approval for filesystem.write and does not write before approval", async () => {
+    const { cwd, store, mission } = await initializedMission();
+    const runner = createToolRunner({ cwd });
+    const result = await runner.runTool({
+      missionId: mission.id,
+      toolName: "filesystem.write",
+      input: { path: "launch.md", content: "ready\n" }
+    });
+    const ledger = await store.readMissionLedger(mission.id);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.approvalId).toMatch(/^a_/);
+    }
+    await expect(readFile(path.join(cwd, "launch.md"), "utf8")).rejects.toThrow();
+    expect(ledger.at(-1)?.type).toBe("tool.denied");
+    expect(ledger.at(-1)?.details).toMatchObject({
+      status: "pending_approval"
+    });
+  }, 15_000);
+
+  it("continues approved filesystem.write with a checkpoint and prevents double execution", async () => {
+    const { cwd, store, mission } = await initializedMission();
+    const runner = createToolRunner({ cwd });
+    const approvalStore = createApprovalStore(cwd);
+    const requested = await runner.runTool({
+      missionId: mission.id,
+      toolName: "filesystem.write",
+      input: { path: "launch.md", content: "ready\n" }
+    });
+    const approvalId = requested.ok ? undefined : requested.approvalId;
+
+    expect(approvalId).toBeDefined();
+    await approvalStore.decideApproval(approvalId ?? "", "approved");
+    const executed = await runner.runApprovedTool(approvalId ?? "");
+    const repeated = await runner.runApprovedTool(approvalId ?? "");
+    const ledger = await store.readMissionLedger(mission.id);
+
+    expect(executed.ok).toBe(true);
+    if (executed.ok) {
+      expect(executed.checkpointId).toMatch(/^c_/);
+    }
+    await expect(readFile(path.join(cwd, "launch.md"), "utf8")).resolves.toBe("ready\n");
+    expect(repeated.ok).toBe(false);
+    if (!repeated.ok) {
+      expect(repeated.message).toContain("already been executed");
+    }
+    expect(ledger.map((event) => event.type).slice(-4)).toEqual([
+      "tool.approved",
+      "checkpoint.created",
+      "tool.started",
+      "tool.completed"
+    ]);
+  }, 15_000);
+
+  it("does not continue denied filesystem.write approvals", async () => {
+    const { cwd, mission } = await initializedMission();
+    const runner = createToolRunner({ cwd });
+    const approvalStore = createApprovalStore(cwd);
+    const requested = await runner.runTool({
+      missionId: mission.id,
+      toolName: "filesystem.write",
+      input: { path: "launch.md", content: "ready\n" }
+    });
+    const approvalId = requested.ok ? undefined : requested.approvalId;
+
+    expect(approvalId).toBeDefined();
+    await approvalStore.decideApproval(approvalId ?? "", "denied", "not now");
+    const result = await runner.runApprovedTool(approvalId ?? "");
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.message).toContain("denied");
+    }
+    await expect(readFile(path.join(cwd, "launch.md"), "utf8")).rejects.toThrow();
+  }, 15_000);
+
+  it("keeps report.write approval-only in Phase 7", async () => {
+    const { cwd, mission } = await initializedMission();
+    const runner = createToolRunner({ cwd });
+    const approvalStore = createApprovalStore(cwd);
+    const requested = await runner.runTool({
+      missionId: mission.id,
+      toolName: "report.write",
+      input: { path: "report.md", content: "report" }
+    });
+    const approvalId = requested.ok ? undefined : requested.approvalId;
+
+    expect(approvalId).toBeDefined();
+    await approvalStore.decideApproval(approvalId ?? "", "approved");
+    const result = await runner.runApprovedTool(approvalId ?? "");
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.message).toContain("not implemented in Phase 7");
+    }
+    await expect(readFile(path.join(cwd, "report.md"), "utf8")).rejects.toThrow();
   }, 15_000);
 
   it("blocks policy-denied tools without creating approvals", async () => {
