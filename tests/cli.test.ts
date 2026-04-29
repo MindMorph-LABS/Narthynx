@@ -1,4 +1,4 @@
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -143,6 +143,63 @@ describe("Narthynx CLI", () => {
     expect(result.stdout).toContain("mission.created");
   });
 
+  it("lists registered typed tools", async () => {
+    const result = await runCli(["tools"]);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("filesystem.list");
+    expect(result.stdout).toContain("filesystem.read");
+    expect(result.stdout).toContain("git.status");
+    expect(result.stdout).toContain("report.write");
+  });
+
+  it("runs a read-only filesystem tool from the CLI", async () => {
+    const cwd = await tempWorkspaceRoot();
+    await runCli(["init"], { cwd });
+    const created = await runCli(["mission", "Prepare launch checklist"], { cwd });
+    const id = created.stdout.match(/id: (m_[^\s]+)/)?.[1];
+
+    expect(id).toBeDefined();
+    const result = await runCli(["tool", id ?? "", "filesystem.list", "--input", "{\"path\":\".\"}"], { cwd });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("\"entries\"");
+  });
+
+  it("reads safe files and refuses .env through the CLI", async () => {
+    const cwd = await tempWorkspaceRoot();
+    await runCli(["init"], { cwd });
+    await writeFile(path.join(cwd, "notes.md"), "safe context\n", "utf8");
+    await writeFile(path.join(cwd, ".env"), "TOKEN=secret\n", "utf8");
+    const created = await runCli(["mission", "Prepare launch checklist"], { cwd });
+    const id = created.stdout.match(/id: (m_[^\s]+)/)?.[1];
+
+    expect(id).toBeDefined();
+    const safe = await runCli(["tool", id ?? "", "filesystem.read", "--input", "{\"path\":\"notes.md\"}"], { cwd });
+    const blocked = await runCli(["tool", id ?? "", "filesystem.read", "--input", "{\"path\":\".env\"}"], { cwd });
+
+    expect(safe.exitCode).toBe(0);
+    expect(safe.stdout).toContain("safe context");
+    expect(blocked.exitCode).toBe(1);
+    expect(blocked.stderr).toContain("blocked by policy");
+  });
+
+  it("blocks approval-required tools from the CLI", async () => {
+    const cwd = await tempWorkspaceRoot();
+    await runCli(["init"], { cwd });
+    const created = await runCli(["mission", "Prepare launch checklist"], { cwd });
+    const id = created.stdout.match(/id: (m_[^\s]+)/)?.[1];
+
+    expect(id).toBeDefined();
+    const result = await runCli(
+      ["tool", id ?? "", "report.write", "--input", "{\"path\":\"report.md\",\"content\":\"report\"}"],
+      { cwd }
+    );
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Approval gates are not implemented until Phase 6");
+  });
+
   it("fails clearly for a missing mission timeline", async () => {
     const cwd = await tempWorkspaceRoot();
     await runCli(["init"], { cwd });
@@ -173,6 +230,6 @@ describe("Narthynx CLI", () => {
     const result = await runCli(["replay", "m_missing"]);
 
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("not implemented in Phase 4");
+    expect(result.stderr).toContain("not implemented in Phase 5");
   });
 });

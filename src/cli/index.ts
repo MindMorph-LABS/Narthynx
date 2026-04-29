@@ -5,6 +5,8 @@ import { Command, CommanderError } from "commander";
 
 import { doctorWorkspace, initWorkspace, resolveWorkspacePaths } from "../config/workspace";
 import { createMissionStore, missionFilePath } from "../missions/store";
+import { createToolRegistry } from "../tools/registry";
+import { createToolRunner } from "../tools/runner";
 
 export const VERSION = "0.1.0";
 
@@ -15,6 +17,8 @@ export const CLI_COMMANDS = [
   "open",
   "plan",
   "timeline",
+  "tools",
+  "tool",
   "approve",
   "pause",
   "resume",
@@ -25,7 +29,7 @@ export const CLI_COMMANDS = [
 export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
   (name): name is Exclude<
     (typeof CLI_COMMANDS)[number],
-    "init" | "mission" | "missions" | "open" | "plan" | "timeline" | "doctor"
+    "init" | "mission" | "missions" | "open" | "plan" | "timeline" | "tools" | "tool" | "doctor"
   > =>
     name !== "init" &&
     name !== "mission" &&
@@ -33,6 +37,8 @@ export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
     name !== "open" &&
     name !== "plan" &&
     name !== "timeline" &&
+    name !== "tools" &&
+    name !== "tool" &&
     name !== "doctor"
 );
 
@@ -55,20 +61,22 @@ const intro = [
   "Narthynx is a local-first Mission Agent OS.",
   "An AI agent that runs missions, not chats.",
   "",
-  "`narthynx init`, `doctor`, `mission`, `missions`, `open`, `plan`, and `timeline` are available in Phase 4.",
-  "Plan execution, approvals, replay, and reports are not implemented yet."
+  "`narthynx init`, `doctor`, `mission`, `missions`, `open`, `plan`, `timeline`, `tools`, and `tool` are available in Phase 5.",
+  "Mission execution, approvals, replay, and write/report actions are not implemented yet."
 ].join("\n");
 
 function notImplementedMessage(commandName: string): string {
   return [
-    `Command "narthynx ${commandName}" is not implemented in Phase 4.`,
-    "Phase 4 provides visible persisted plan graphs. Execution behavior starts in later phases."
+    `Command "narthynx ${commandName}" is not implemented in Phase 5.`,
+    "Phase 5 provides typed tool registration, safe read-only tool execution, and tool ledger events."
   ].join("\n");
 }
 
 export function createProgram(io: CliIo, options: CliOptions = {}): Command {
   const cwd = options.cwd ?? process.cwd();
   const missionStore = createMissionStore(cwd);
+  const toolRegistry = createToolRegistry();
+  const toolRunner = createToolRunner({ cwd, registry: toolRegistry });
   const program = new Command();
 
   program
@@ -85,9 +93,9 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
     "after",
     [
       "",
-      "Phase 4 status:",
-      "  Workspace init, mission persistence, ledgers, and visible persisted plan graphs are implemented.",
-      "  Plan execution, approvals, replay, and reports still fail honestly until their build phases land."
+      "Phase 5 status:",
+      "  Workspace init, mission persistence, ledgers, plan graphs, and typed read-only tools are implemented.",
+      "  Mission execution, approvals, replay, and write/report actions still fail honestly until their build phases land."
     ].join("\n")
   );
 
@@ -246,6 +254,55 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
         for (const [index, event] of events.entries()) {
           io.writeOut(`${index + 1}. ${event.timestamp}  ${event.type}  ${event.summary}\n`);
         }
+      } catch (error) {
+        writeCliError(io, error);
+      }
+    });
+
+  program
+    .command("tools")
+    .description("List registered typed tools. (Phase 5)")
+    .action(() => {
+      io.writeOut("Tools\n");
+      for (const tool of toolRegistry.list()) {
+        io.writeOut(
+          `${tool.name}  risk=${tool.riskLevel}  sideEffect=${tool.sideEffect}  approval=${tool.requiresApproval ? "yes" : "no"}\n`
+        );
+      }
+    });
+
+  program
+    .command("tool")
+    .description("Run a typed diagnostic tool for a mission. (Phase 5)")
+    .argument("<mission-id>", "Mission ID")
+    .argument("<tool-name>", "Tool name")
+    .requiredOption("--input <json>", "Tool input JSON")
+    .action(async (missionId: string, toolName: string, commandOptions: { input: string }) => {
+      let input: unknown;
+
+      try {
+        input = JSON.parse(commandOptions.input);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Invalid JSON";
+        io.writeErr(`Invalid --input JSON: ${message}\n`);
+        process.exitCode = 1;
+        return;
+      }
+
+      try {
+        const result = await toolRunner.runTool({
+          missionId,
+          toolName,
+          input
+        });
+
+        if (!result.ok) {
+          io.writeErr(`${result.message}\n`);
+          process.exitCode = 1;
+          return;
+        }
+
+        io.writeOut(`${JSON.stringify(result.output, null, 2)}\n`);
       } catch (error) {
         writeCliError(io, error);
       }
