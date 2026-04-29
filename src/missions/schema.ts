@@ -20,9 +20,13 @@ export const missionContextSchema = z.object({
   files: z.array(z.string())
 });
 
-export const planGraphSchema = z.object({
+export const missionPlanGraphSchema = z.object({
+  missionId: z.string().regex(/^m_[a-z0-9_-]+$/).optional(),
+  version: z.number().int().positive().optional(),
   nodes: z.array(z.unknown()),
-  edges: z.array(z.unknown())
+  edges: z.array(z.unknown()),
+  createdAt: z.string().datetime().optional(),
+  updatedAt: z.string().datetime().optional()
 });
 
 export const riskProfileSchema = z.object({
@@ -36,7 +40,7 @@ export const missionSchema = z.object({
   goal: z.string().min(1),
   successCriteria: z.array(z.string().min(1)).min(1),
   context: missionContextSchema,
-  planGraph: planGraphSchema,
+  planGraph: missionPlanGraphSchema,
   state: missionStateSchema,
   riskProfile: riskProfileSchema,
   checkpoints: z.array(z.unknown()),
