@@ -1,0 +1,40 @@
+{
+  "name": "narthynx",
+  "version": "0.1.0",
+  "description": "A local-first Mission Agent OS.",
+  "type": "module",
+  "bin": {
+    "narthynx": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "narthynx": "tsx src/cli/index.ts"
+  },
+  "keywords": [
+    "agents",
+    "cli",
+    "mission-runtime",
+    "local-first"
+  ],
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "commander": "12.1.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.18.0",
+    "@types/node": "22.10.5",
+    "eslint": "9.18.0",
+    "prettier": "3.4.2",
+    "tsup": "8.3.5",
+    "tsx": "4.19.2",
+    "typescript": "5.7.3",
+    "typescript-eslint": "8.20.0",
+    "vitest": "2.1.8"
+  }
+}
