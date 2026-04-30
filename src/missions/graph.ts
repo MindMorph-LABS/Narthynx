@@ -132,6 +132,21 @@ export function createDeterministicPlanGraph(mission: Mission, timestamp = new D
   });
 }
 
+export function updatePlanGraphNodeStatus(graph: PlanGraph, nodeId: string, status: MissionNodeStatus): PlanGraph {
+  const now = new Date().toISOString();
+  const nodes = graph.nodes.map((node) => (node.id === nodeId ? { ...node, status } : node));
+
+  if (!nodes.some((node) => node.id === nodeId)) {
+    throw new Error(`Plan node not found: ${nodeId}`);
+  }
+
+  return planGraphSchema.parse({
+    ...graph,
+    nodes,
+    updatedAt: now
+  });
+}
+
 export async function writePlanGraph(filePath: string, graph: PlanGraph): Promise<PlanGraph> {
   const parsed = planGraphSchema.parse(graph);
   await writeFile(filePath, `${JSON.stringify(parsed, null, 2)}\n`, "utf8");

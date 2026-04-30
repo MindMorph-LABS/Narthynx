@@ -372,6 +372,38 @@ describe("Narthynx CLI", () => {
     expect(result.stdout).toContain("Artifact created: artifacts/report.md");
   });
 
+  it("runs the Phase 13 executor, pauses for approval, resumes, completes, reports, and replays", async () => {
+    const cwd = await tempWorkspaceRoot();
+    await runCli(["init"], { cwd });
+    const created = await runCli(["mission", "Prepare launch checklist"], { cwd });
+    const id = created.stdout.match(/id: (m_[^\s]+)/)?.[1];
+
+    expect(id).toBeDefined();
+    const started = await runCli(["run", id ?? ""], { cwd });
+    const approvalId = started.stdout.match(/Paused for approval: (a_[^\s]+)/)?.[1];
+    const missionAfterRun = await runCli(["open", id ?? ""], { cwd });
+
+    expect(started.exitCode).toBe(0);
+    expect(started.stdout).toContain("Completed node: Inspect workspace (filesystem.list)");
+    expect(started.stdout).toContain("Then: narthynx resume");
+    expect(approvalId).toBeDefined();
+    expect(missionAfterRun.stdout).toContain("state: waiting_for_approval");
+
+    const approved = await runCli(["approve", approvalId ?? ""], { cwd });
+    const resumed = await runCli(["resume", id ?? ""], { cwd });
+    const reportPath = path.join(cwd, ".narthynx", "missions", id ?? "", "artifacts", "report.md");
+    const replay = await runCli(["replay", id ?? ""], { cwd });
+
+    expect(approved.exitCode).toBe(0);
+    expect(approved.stdout).toContain("Approved action executed");
+    expect(resumed.exitCode).toBe(0);
+    expect(resumed.stdout).toContain(`Mission completed: ${id}`);
+    await expect(readFile(reportPath, "utf8")).resolves.toContain("State: completed");
+    expect(replay.stdout).toContain("Node started: Understand goal");
+    expect(replay.stdout).toContain("Node completed: Generate final report");
+    expect(replay.stdout).toContain("Mission state changed: verifying -> completed");
+  });
+
   it("fails clearly for a missing checkpoint rewind", async () => {
     const cwd = await tempWorkspaceRoot();
     await runCli(["init"], { cwd });
@@ -485,11 +517,13 @@ describe("Narthynx CLI", () => {
     expect(result.stderr).toContain("Workspace is not initialized. Run: narthynx init");
   });
 
-  it("fails honestly for later-phase placeholders", async () => {
-    const result = await runCli(["pause", "m_missing"]);
+  it("fails clearly when pausing a missing mission", async () => {
+    const cwd = await tempWorkspaceRoot();
+    await runCli(["init"], { cwd });
+    const result = await runCli(["pause", "m_missing"], { cwd });
 
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("not implemented in Phase 12");
+    expect(result.stderr).toContain("Failed to read mission at");
   });
 
   it("fails model planning clearly when a cloud provider is configured but network policy is disabled", async () => {

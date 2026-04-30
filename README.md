@@ -33,10 +33,7 @@ Implemented:
 - Phase 10: dependency-free interactive shell with status lines and slash commands.
 - Phase 11: approval-gated `shell.run` plus read-only `git.diff` and `git.log` connectors.
 - Phase 12: model provider abstraction with deterministic stub mode, optional OpenAI-compatible routing, model ledger events, and cost summaries.
-
-Not implemented yet:
-
-- Mission graph execution.
+- Phase 13: bounded mission executor vertical slice with read-only steps, approval pause/resume, completion, reports, and replay.
 
 The CLI intentionally fails honestly for commands that belong to later phases.
 
@@ -126,6 +123,7 @@ pnpm narthynx missions
 pnpm narthynx open <mission-id>
 pnpm narthynx plan <mission-id>
 pnpm narthynx plan <mission-id> --model
+pnpm narthynx run <mission-id>
 pnpm narthynx timeline <mission-id>
 ```
 
@@ -151,8 +149,11 @@ Inside interactive mode, use slash commands for the same durable runtime:
 ```txt
 /mission "Prepare my launch checklist from this repo"
 /plan
+/run
 /tool filesystem.list --input '{"path":"."}'
 /timeline
+/approve
+/resume
 /report
 /replay
 /cost
@@ -238,6 +239,8 @@ Phase 11 includes local command execution only through approval-gated `shell.run
 
 Phase 12 keeps `stub` as the default model provider. Optional cloud model calls are disabled unless explicitly configured and allowed by policy.
 
+Phase 13 executes only the deterministic MVP graph slice: local read-only inspection, approval-gated report artifact write, deterministic final report generation, and replayable completion. It does not perform autonomous shell execution, model-selected tools, external communication, or arbitrary writes.
+
 ## Development
 
 ```bash
@@ -273,6 +276,7 @@ The build follows the phased plan in `Narthynx_Codex_AGENTS.md`.
 12. Phase 11: Shell and Git connectors.
 13. Phase 12: Model provider abstraction.
 14. Phase 13: Mission executor vertical slice.
+15. Phase 14: Open-source polish.
 
 The first public demo is successful when a user can create a mission, inspect its plan, execute safe local actions, pause for risky approval, approve or deny, generate a report, and replay the mission timeline.
 
@@ -280,7 +284,7 @@ The first public demo is successful when a user can create a mission, inspect it
 
 ```txt
 src/
-  agent/     model provider abstraction, router, model planning, cost summaries
+  agent/     model provider abstraction, router, model planning, cost summaries, executor
   cli/       CLI entrypoint, interactive shell, slash commands, terminal rendering
   config/    workspace defaults, YAML loading, init, doctor
   missions/  mission schema, store, ledger, graph, approvals, checkpoints, reports, replay

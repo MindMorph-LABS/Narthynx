@@ -9,7 +9,9 @@ import {
   createDeterministicPlanGraph,
   graphFilePath,
   readPlanGraph,
+  updatePlanGraphNodeStatus,
   writePlanGraph,
+  type MissionNodeStatus,
   type PlanGraph
 } from "./graph";
 import { appendLedgerEvent, ledgerFilePath, readLedgerEvents, type LedgerEvent } from "./ledger";
@@ -31,6 +33,7 @@ export interface MissionStore {
     graph: PlanGraph,
     details?: { summary?: string; provider?: string; model?: string }
   ): Promise<PlanGraph>;
+  updateMissionPlanNodeStatus(id: string, nodeId: string, status: MissionNodeStatus): Promise<PlanGraph>;
 }
 
 export function createMissionStore(cwd = process.cwd()): MissionStore {
@@ -242,6 +245,22 @@ export function createMissionStore(cwd = process.cwd()): MissionStore {
         },
         timestamp: now
       });
+
+      return parsedGraph;
+    },
+
+    async updateMissionPlanNodeStatus(id, nodeId, status) {
+      const mission = await this.readMission(id);
+      const missionDir = missionDirectory(paths.missionsDir, id);
+      const currentGraph = await readPlanGraph(graphFilePath(missionDir));
+      const graph = updatePlanGraphNodeStatus(currentGraph, nodeId, status);
+      const parsedGraph = await writePlanGraph(graphFilePath(missionDir), graph);
+      const updated = missionSchema.parse({
+        ...mission,
+        planGraph: parsedGraph,
+        updatedAt: parsedGraph.updatedAt
+      });
+      await writeMissionFile(missionDir, updated);
 
       return parsedGraph;
     }

@@ -84,6 +84,12 @@ type MissionNodeType =
 
 Every graph transition must be recorded before and after execution. On crash, execution resumes from the last safe persisted step.
 
+## Phase 13 Executor Slice
+
+Phase 13 executes the deterministic MVP graph only. It records node progress, runs read-only local tools, pauses on an approval-gated report artifact write, resumes after approval or denial, transitions the mission through verification, generates a deterministic final report, and marks the mission completed.
+
+It does not perform arbitrary model-authored tool execution, autonomous shell commands, external communication, network calls, or unbounded filesystem writes.
+
 ## Ledger
 
 Every mission must have an append-only ledger. The ledger is the source of traceability and replay.

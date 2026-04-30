@@ -32,9 +32,12 @@ Interactive mode supports:
 /mission
 /missions
 /plan [mission-id] [--model]
+/run [mission-id]
 /timeline [mission-id]
 /tool [mission-id] <tool-name> --input <json>
 /approve [approval-id] [--deny] [--reason <text>]
+/pause [mission-id]
+/resume [mission-id]
 /rewind <checkpoint-id> [mission-id]
 /report [mission-id]
 /replay [mission-id]
@@ -48,6 +51,8 @@ Interactive mode supports:
 ```
 
 Commands that accept `[mission-id]` use the current mission when the argument is omitted.
+
+`/run` executes the bounded Phase 13 mission executor slice. It advances the deterministic graph, runs read-only local tools, pauses for approval on the report artifact write, and resumes after `/approve` plus `/resume`.
 
 ## Safety Boundaries
 
@@ -64,6 +69,8 @@ Shortcuts:
 ```
 
 `! <command>` creates a typed `shell.run` approval for the current mission. The command does not execute until the user approves it through `/approve <approval-id>` or `narthynx approve <approval-id>`.
+
+The Phase 13 executor does not use `!` or shell tools. It only uses deterministic read-only steps plus the approval-gated report artifact path.
 
 `/policy` is read-only. Policy edits need a future typed update workflow so safety defaults are not weakened casually.
 

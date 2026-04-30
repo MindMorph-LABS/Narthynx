@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { Command, CommanderError } from "commander";
 
 import { createCostService } from "../agent/cost";
+import { createMissionExecutor } from "../agent/executor";
 import { createModelPlanner } from "../agent/model-planner";
 import { doctorWorkspace, initWorkspace, resolveWorkspacePaths } from "../config/workspace";
 import { runInteractiveSession } from "./interactive";
@@ -23,6 +24,7 @@ export const CLI_COMMANDS = [
   "missions",
   "open",
   "plan",
+  "run",
   "timeline",
   "tools",
   "tool",
@@ -44,6 +46,7 @@ export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
     | "missions"
     | "open"
     | "plan"
+    | "run"
     | "timeline"
     | "tools"
     | "tool"
@@ -51,6 +54,8 @@ export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
     | "rewind"
     | "report"
     | "cost"
+    | "pause"
+    | "resume"
     | "replay"
     | "doctor"
   > =>
@@ -59,6 +64,7 @@ export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
     name !== "missions" &&
     name !== "open" &&
     name !== "plan" &&
+    name !== "run" &&
     name !== "timeline" &&
     name !== "tools" &&
     name !== "tool" &&
@@ -66,6 +72,8 @@ export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
     name !== "rewind" &&
     name !== "report" &&
     name !== "cost" &&
+    name !== "pause" &&
+    name !== "resume" &&
     name !== "replay" &&
     name !== "doctor"
 );
@@ -90,15 +98,15 @@ const intro = [
   "Narthynx is a local-first Mission Agent OS.",
   "An AI agent that runs missions, not chats.",
   "",
-  "`narthynx init`, `doctor`, `mission`, `missions`, `open`, `plan`, `timeline`, `tools`, `tool`, `approve`, `rewind`, `report`, `replay`, and `cost` are available in Phase 12.",
+  "`narthynx init`, `doctor`, `mission`, `missions`, `open`, `plan`, `run`, `timeline`, `tools`, `tool`, `approve`, `pause`, `resume`, `rewind`, `report`, `replay`, and `cost` are available in Phase 13.",
   "Run `narthynx` in a terminal to open interactive mode.",
-  "Mission execution is not implemented yet."
+  "Mission execution is implemented as a bounded Phase 13 vertical slice."
 ].join("\n");
 
 function notImplementedMessage(commandName: string): string {
   return [
-    `Command "narthynx ${commandName}" is not implemented in Phase 12.`,
-    "Phase 12 provides model provider abstraction, explicit model planning, and mission cost summaries."
+    `Command "narthynx ${commandName}" is not implemented in Phase 13.`,
+    "Phase 13 provides the first approval-gated mission executor vertical slice."
   ].join("\n");
 }
 
@@ -111,6 +119,7 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
   const replayService = createReplayService(cwd);
   const costService = createCostService(cwd);
   const modelPlanner = createModelPlanner(cwd);
+  const executor = createMissionExecutor(cwd);
   const toolRegistry = createToolRegistry();
   const toolRunner = createToolRunner({ cwd, registry: toolRegistry });
   const program = new Command();
@@ -129,9 +138,8 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
     "after",
     [
       "",
-      "Phase 12 status:",
-      "  Workspace init, missions, ledgers, plan graphs, typed tools, approval gates, filesystem writes, checkpoints, reports, replay, interactive slash commands, shell.run, git.diff, git.log, model provider routing, and cost summaries are implemented.",
-      "  Mission execution still fails honestly until its build phase lands."
+      "Phase 13 status:",
+      "  Workspace init, missions, ledgers, plan graphs, typed tools, approval gates, filesystem writes, checkpoints, reports, replay, interactive slash commands, shell.run, git.diff, git.log, model provider routing, cost summaries, and the first mission executor vertical slice are implemented."
     ].join("\n")
   );
 
@@ -310,6 +318,19 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
     });
 
   program
+    .command("run")
+    .description("Run or continue the Phase 13 mission executor vertical slice.")
+    .argument("<mission-id>", "Mission ID")
+    .action(async (missionId: string) => {
+      try {
+        const result = await executor.runMission(missionId);
+        io.writeOut(result.output);
+      } catch (error) {
+        writeCliError(io, error);
+      }
+    });
+
+  program
     .command("tools")
     .description("List registered typed tools. (Phase 5)")
     .action(() => {
@@ -406,6 +427,32 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
         } else {
           io.writeOut("Recorded denial. The action was not executed.\n");
         }
+      } catch (error) {
+        writeCliError(io, error);
+      }
+    });
+
+  program
+    .command("pause")
+    .description("Pause a running or approval-waiting mission. (Phase 13)")
+    .argument("<mission-id>", "Mission ID")
+    .action(async (missionId: string) => {
+      try {
+        const result = await executor.pauseMission(missionId);
+        io.writeOut(result.output);
+      } catch (error) {
+        writeCliError(io, error);
+      }
+    });
+
+  program
+    .command("resume")
+    .description("Resume a paused or approval-waiting mission. (Phase 13)")
+    .argument("<mission-id>", "Mission ID")
+    .action(async (missionId: string) => {
+      try {
+        const result = await executor.resumeMission(missionId);
+        io.writeOut(result.output);
       } catch (error) {
         writeCliError(io, error);
       }
@@ -525,10 +572,7 @@ export async function runCli(argv: string[], options: CliOptions = {}): Promise<
 }
 
 function placeholderDescription(commandName: (typeof PLACEHOLDER_COMMANDS)[number]): string {
-  const descriptions: Record<(typeof PLACEHOLDER_COMMANDS)[number], string> = {
-    pause: "Pause a mission. (Phase 2)",
-    resume: "Resume a mission. (Phase 2)"
-  };
+  const descriptions: Record<(typeof PLACEHOLDER_COMMANDS)[number], string> = {};
 
   return descriptions[commandName];
 }

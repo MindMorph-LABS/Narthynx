@@ -1,6 +1,7 @@
 import { loadWorkspacePolicy } from "../config/load";
 import { doctorWorkspace, resolveWorkspacePaths } from "../config/workspace";
 import { createCostService } from "../agent/cost";
+import { createMissionExecutor } from "../agent/executor";
 import { createModelPlanner } from "../agent/model-planner";
 import { createApprovalStore } from "../missions/approvals";
 import { createCheckpointStore } from "../missions/checkpoints";
@@ -112,6 +113,8 @@ export async function dispatchSlashCommand(
       return handleMissionCommand(command.args, context, stores);
     case "plan":
       return handlePlanCommand(command.args, context, stores);
+    case "run":
+      return handleRunCommand(command.args, context, stores);
     case "timeline":
       return handleTimelineCommand(command.args, context, stores);
     case "report":
@@ -124,6 +127,10 @@ export async function dispatchSlashCommand(
       return handleApproveCommand(command.args, context, stores);
     case "rewind":
       return handleRewindCommand(command.args, context, stores);
+    case "pause":
+      return handlePauseCommand(command.args, context, stores);
+    case "resume":
+      return handleResumeCommand(command.args, context, stores);
     case "tool":
       return handleToolCommand(command.args, context, stores);
     default:
@@ -141,6 +148,7 @@ function createInteractiveStores(cwd: string) {
     replayService: createReplayService(cwd),
     costService: createCostService(cwd),
     modelPlanner: createModelPlanner(cwd),
+    executor: createMissionExecutor(cwd),
     toolRegistry,
     toolRunner: createToolRunner({ cwd, registry: toolRegistry })
   };
@@ -207,6 +215,16 @@ async function handleTimelineCommand(
     ),
     missionId
   );
+}
+
+async function handleRunCommand(
+  args: string[],
+  context: SlashCommandContext,
+  stores: ReturnType<typeof createInteractiveStores>
+): Promise<SlashCommandResult> {
+  const missionId = resolveMissionArgument(args, context.currentMissionId);
+  const result = await stores.executor.runMission(missionId);
+  return stay(result.output, missionId);
 }
 
 async function handleReportCommand(
@@ -298,6 +316,26 @@ async function handleRewindCommand(
     ].join("\n"),
     missionId
   );
+}
+
+async function handlePauseCommand(
+  args: string[],
+  context: SlashCommandContext,
+  stores: ReturnType<typeof createInteractiveStores>
+): Promise<SlashCommandResult> {
+  const missionId = resolveMissionArgument(args, context.currentMissionId);
+  const result = await stores.executor.pauseMission(missionId);
+  return stay(result.output, missionId);
+}
+
+async function handleResumeCommand(
+  args: string[],
+  context: SlashCommandContext,
+  stores: ReturnType<typeof createInteractiveStores>
+): Promise<SlashCommandResult> {
+  const missionId = resolveMissionArgument(args, context.currentMissionId);
+  const result = await stores.executor.resumeMission(missionId);
+  return stay(result.output, missionId);
 }
 
 async function handleToolCommand(

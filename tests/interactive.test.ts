@@ -102,6 +102,32 @@ describe("interactive session", () => {
     expect(result.stdout).toContain("model calls: 1");
   });
 
+  it("runs, approves, resumes, reports, and replays the Phase 13 executor flow", async () => {
+    const cwd = await tempWorkspaceRoot();
+    await initWorkspace(cwd);
+    const first = await runInteractiveSession({
+      cwd,
+      inputLines: ['/mission "Prepare launch checklist"', "/run", "/exit"]
+    });
+    const missionId = first.stdout.match(/Mission (m_[^\s]+)/)?.[1];
+    const approvalId = first.stdout.match(/Paused for approval: (a_[^\s]+)/)?.[1];
+
+    expect(missionId).toBeDefined();
+    expect(approvalId).toBeDefined();
+    expect(first.stdout).toContain("Completed node: Gather relevant context (git.status)");
+
+    const second = await runInteractiveSession({
+      cwd,
+      inputLines: [`/approve ${approvalId}`, `/resume ${missionId}`, "/report", "/replay", "/exit"]
+    });
+
+    expect(second.exitCode).toBe(0);
+    expect(second.stdout).toContain(`Approval approved: ${approvalId}`);
+    expect(second.stdout).toContain(`Mission completed: ${missionId}`);
+    expect(second.stdout).toContain("Report regenerated");
+    expect(second.stdout).toContain("Node completed: Generate final report");
+  });
+
   it("creates and approves a filesystem.write approval inside interactive mode", async () => {
     const cwd = await tempWorkspaceRoot();
     await initWorkspace(cwd);
