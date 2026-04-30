@@ -6,7 +6,15 @@ Narthynx is built in phases. Each phase must leave the repo runnable and testabl
 
 - Phase 0: Complete
 - Phase 1: Complete
-- Phase 2: Next
+- Phase 2: Complete
+- Phase 3: Complete
+- Phase 4: Complete
+- Phase 5: Complete
+- Phase 6: Complete
+- Phase 7: Complete
+- Phase 8: Complete
+- Phase 9: Complete
+- Phase 10: Next
 - Phase 15: Post-MVP only
 
 ## Phases
@@ -15,15 +23,15 @@ Narthynx is built in phases. Each phase must leave the repo runnable and testabl
 | --- | --- | --- | --- |
 | 0 | Repo Bootstrap | Complete | Create a clean open-source TypeScript project foundation |
 | 1 | Workspace Init | Complete | Create local `.narthynx/` workspace with config, policy, missions folder, and doctor checks |
-| 2 | Mission Schema and Store | Next | Create durable mission objects and persistence |
-| 3 | Ledger | Planned | Add append-only event tracing |
-| 4 | Plan Graph | Planned | Create visible mission plans |
-| 5 | Tool System Foundation | Planned | Implement typed tools and tool execution wrapper |
-| 6 | Policy, Risk, and Approval Gate | Planned | Prevent unsafe execution with approval queues |
-| 7 | Filesystem Write and Checkpoints | Planned | Support approval-gated local writes and basic rewind |
-| 8 | Report Generation | Planned | Generate mission reports as durable artifacts |
-| 9 | Replay | Planned | Make missions replayable from the ledger |
-| 10 | Interactive CLI/TUI | Planned | Create the mission-first interactive shell |
+| 2 | Mission Schema and Store | Complete | Create durable mission objects and persistence |
+| 3 | Ledger | Complete | Add append-only event tracing |
+| 4 | Plan Graph | Complete | Create visible mission plans |
+| 5 | Tool System Foundation | Complete | Implement typed tools and tool execution wrapper |
+| 6 | Policy, Risk, and Approval Gate | Complete | Prevent unsafe execution with approval queues |
+| 7 | Filesystem Write and Checkpoints | Complete | Support approval-gated local writes and basic rewind |
+| 8 | Report Generation | Complete | Generate mission reports as durable artifacts |
+| 9 | Replay | Complete | Make missions replayable from the ledger |
+| 10 | Interactive CLI/TUI | Next | Create the mission-first interactive shell |
 | 11 | Shell and Git Connectors | Planned | Add carefully gated shell and Git operations |
 | 12 | Model Provider Abstraction | Planned | Prepare model routing without locking to one provider |
 | 13 | Mission Executor Vertical Slice | Planned | Run the MVP flow end to end |

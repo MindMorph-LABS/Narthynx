@@ -22,16 +22,21 @@ Implemented:
 
 - Phase 0: TypeScript CLI bootstrap, tests, build tooling, and open-source project metadata.
 - Phase 1: local `.narthynx/` workspace initialization and doctor checks.
+- Phase 2: durable mission creation, listing, opening, persistence, and state transitions.
+- Phase 3: append-only mission ledger.
+- Phase 4: deterministic mission plan graph.
+- Phase 5: typed tool foundation for local reads, Git status, and report writes.
+- Phase 6: policy, risk classification, and approval queue.
+- Phase 7: approval-gated filesystem writes with checkpoints and basic rewind.
+- Phase 8: deterministic Markdown mission reports as durable artifacts.
+- Phase 9: replay rendering from the append-only ledger.
 
 Not implemented yet:
 
-- Mission creation and persistence.
-- Mission ledger and replay.
-- Plan graph execution.
-- Approval queue.
-- Tool runner.
-- Reports and artifacts.
+- Mission graph execution.
 - Interactive TUI.
+- Shell command execution.
+- Model provider routing and cost tracking.
 
 The CLI intentionally fails honestly for commands that belong to later phases.
 
@@ -100,7 +105,31 @@ Check workspace health:
 pnpm narthynx doctor
 ```
 
-In the current phase, mission runtime commands such as `mission`, `approve`, and `replay` are visible but intentionally not implemented.
+Create a mission and inspect its durable state:
+
+```bash
+pnpm narthynx mission "Prepare my launch checklist from this repo"
+pnpm narthynx missions
+pnpm narthynx open <mission-id>
+pnpm narthynx plan <mission-id>
+pnpm narthynx timeline <mission-id>
+```
+
+Run safe diagnostic tools through the typed tool runner:
+
+```bash
+pnpm narthynx tools
+pnpm narthynx tool <mission-id> filesystem.list --input "{\"path\":\".\"}"
+```
+
+Generate the mission report and replay the mission story:
+
+```bash
+pnpm narthynx report <mission-id>
+pnpm narthynx replay <mission-id>
+```
+
+Approval-gated writes are available through typed tools and must be explicitly approved before execution.
 
 ## Workspace Files
 
@@ -149,7 +178,7 @@ Narthynx is designed around these defaults:
 - every future high-risk action checkpointed
 - no secrets sent to cloud models without explicit policy permission
 
-Phase 1 does not execute shell commands, perform network calls, read credentials, or write mission state. It only initializes and validates local workspace files.
+Current MVP phases do not perform network calls, read credentials, send external communications, or execute arbitrary shell commands. Local writes are routed through typed tools, approval gates, ledger events, and checkpoints.
 
 ## Development
 
@@ -192,10 +221,8 @@ The first public demo is successful when a user can create a mission, inspect it
 src/
   cli/       CLI entrypoint
   config/    workspace defaults, YAML loading, init, doctor
-  agent/     future planner/executor/verifier modules
-  missions/  future mission schema/store/ledger/graph modules
-  safety/    future policy/risk/approval modules
-  tools/     future typed tool implementations
+  missions/  mission schema, store, ledger, graph, approvals, checkpoints, reports, replay
+  tools/     typed tool definitions, registry, policy classification, runner
 tests/       Vitest coverage for implemented phases
 ```
 

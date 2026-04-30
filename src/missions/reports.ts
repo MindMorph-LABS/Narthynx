@@ -148,12 +148,13 @@ function renderReport(input: {
     "",
     "## Limitations",
     "- This Phase 8 report is deterministic and local-only; no model-generated analysis is included.",
-    "- Mission execution, replay rendering, model routing, shell execution, and network behavior are not implemented in this phase.",
+    "- Mission execution, model routing, shell execution, and network behavior are not implemented in this phase.",
     "",
     "## Next Recommended Actions",
     "- Review this report against the mission goal and success criteria.",
-    "- Use `narthynx timeline <mission-id>` for the append-only event history.",
-    "- Continue with later Narthynx phases for replay and fuller mission execution."
+    "- Use `narthynx timeline <mission-id>` for the raw append-only event history.",
+    "- Use `narthynx replay <mission-id>` for the human-readable mission story.",
+    "- Continue with later Narthynx phases for fuller mission execution."
   ];
 
   return `${reportLines.join("\n")}\n`;

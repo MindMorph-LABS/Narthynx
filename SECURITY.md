@@ -4,7 +4,9 @@ Narthynx is an early-stage local-first agent runtime. Security defaults are part
 
 ## Current Phase
 
-Phase 0 contains only CLI bootstrap behavior. It does not execute shell commands, read credentials, write mission files, call networks, or run external communications.
+Phase 9 is implemented. Narthynx can create durable local missions, append ledgers, run typed MVP tools, require approvals for local writes, create checkpoints, generate reports, rewind filesystem-write checkpoints, and replay mission ledgers.
+
+It does not execute arbitrary shell commands, read credentials, call networks, or send external communications in the current MVP phases.
 
 ## Security Principles
 
@@ -12,8 +14,8 @@ Phase 0 contains only CLI bootstrap behavior. It does not execute shell commands
 - No credential access by default.
 - No shell execution in auto mode.
 - No network by default in the MVP.
-- Every future tool call must be logged.
-- Every future high-risk action must require approval and checkpointing.
+- Every tool call must be logged.
+- Every high-risk local write must require approval and checkpointing.
 
 ## Reporting Issues
 
