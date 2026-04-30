@@ -32,11 +32,11 @@ Implemented:
 - Phase 9: replay rendering from the append-only ledger.
 - Phase 10: dependency-free interactive shell with status lines and slash commands.
 - Phase 11: approval-gated `shell.run` plus read-only `git.diff` and `git.log` connectors.
+- Phase 12: model provider abstraction with deterministic stub mode, optional OpenAI-compatible routing, model ledger events, and cost summaries.
 
 Not implemented yet:
 
 - Mission graph execution.
-- Model provider routing and cost tracking.
 
 The CLI intentionally fails honestly for commands that belong to later phases.
 
@@ -93,7 +93,7 @@ pnpm narthynx
 Interactive mode starts a mission-first shell:
 
 ```txt
-Narthynx  mode: Ask  mission: none  state: none  risk: none
+Narthynx  mode: Ask  mission: none  state: none  risk: none  model: stub
 nx>
 ```
 
@@ -125,6 +125,7 @@ pnpm narthynx mission "Prepare my launch checklist from this repo"
 pnpm narthynx missions
 pnpm narthynx open <mission-id>
 pnpm narthynx plan <mission-id>
+pnpm narthynx plan <mission-id> --model
 pnpm narthynx timeline <mission-id>
 ```
 
@@ -140,6 +141,7 @@ Generate the mission report and replay the mission story:
 ```bash
 pnpm narthynx report <mission-id>
 pnpm narthynx replay <mission-id>
+pnpm narthynx cost <mission-id>
 ```
 
 Approval-gated writes are available through typed tools and must be explicitly approved before execution.
@@ -153,6 +155,7 @@ Inside interactive mode, use slash commands for the same durable runtime:
 /timeline
 /report
 /replay
+/cost
 /help
 ```
 
@@ -164,6 +167,23 @@ Read-only Git connectors are available through typed tools:
 pnpm narthynx tool <mission-id> git.diff --input "{}"
 pnpm narthynx tool <mission-id> git.log --input "{\"maxCount\":5}"
 ```
+
+Model planning is explicit and local-first by default:
+
+```bash
+pnpm narthynx plan <mission-id> --model
+```
+
+Without provider environment variables, `--model` uses the deterministic `stub` provider and records zero-cost `model.called` and `cost.recorded` ledger events. To opt into an OpenAI-compatible provider, set:
+
+```bash
+NARTHYNX_MODEL_PROVIDER=openai-compatible
+NARTHYNX_OPENAI_BASE_URL=https://your-provider.example/v1
+NARTHYNX_OPENAI_API_KEY=...
+NARTHYNX_OPENAI_MODEL=...
+```
+
+Cloud model calls require `allow_network: true` in `policy.yaml`. Sensitive context is blocked or refused unless policy explicitly allows it, and secrets are not persisted to mission files.
 
 ## Workspace Files
 
@@ -212,9 +232,11 @@ Narthynx is designed around these defaults:
 - every future high-risk action checkpointed
 - no secrets sent to cloud models without explicit policy permission
 
-Current MVP phases do not perform network calls, read credentials, send external communications, or execute arbitrary shell commands. Local writes are routed through typed tools, approval gates, ledger events, and checkpoints.
+Current MVP phases do not read credentials, send external communications, or execute arbitrary shell commands. Local writes are routed through typed tools, approval gates, ledger events, and checkpoints.
 
 Phase 11 includes local command execution only through approval-gated `shell.run` with `shell: false`, blocked metacharacters, blocked destructive patterns, workspace-bounded `cwd`, ledger events, and output artifacts.
+
+Phase 12 keeps `stub` as the default model provider. Optional cloud model calls are disabled unless explicitly configured and allowed by policy.
 
 ## Development
 
@@ -250,6 +272,7 @@ The build follows the phased plan in `Narthynx_Codex_AGENTS.md`.
 11. Phase 10: Interactive CLI/TUI.
 12. Phase 11: Shell and Git connectors.
 13. Phase 12: Model provider abstraction.
+14. Phase 13: Mission executor vertical slice.
 
 The first public demo is successful when a user can create a mission, inspect its plan, execute safe local actions, pause for risky approval, approve or deny, generate a report, and replay the mission timeline.
 
@@ -257,6 +280,7 @@ The first public demo is successful when a user can create a mission, inspect it
 
 ```txt
 src/
+  agent/     model provider abstraction, router, model planning, cost summaries
   cli/       CLI entrypoint, interactive shell, slash commands, terminal rendering
   config/    workspace defaults, YAML loading, init, doctor
   missions/  mission schema, store, ledger, graph, approvals, checkpoints, reports, replay

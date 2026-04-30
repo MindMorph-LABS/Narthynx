@@ -44,6 +44,7 @@ describe("interactive session", () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("Narthynx interactive");
     expect(result.stdout).toContain("Narthynx slash commands");
+    expect(result.stdout).toContain("/cost [mission-id]");
     expect(result.stdout).toContain("Exiting Narthynx interactive.");
   });
 
@@ -69,7 +70,7 @@ describe("interactive session", () => {
 
     const result = await runInteractiveSession({
       cwd,
-      inputLines: ['/mission "Prepare launch checklist"', "/plan", "/timeline", "/report", "/replay", "/exit"]
+      inputLines: ['/mission "Prepare launch checklist"', "/plan", "/timeline", "/report", "/replay", "/cost", "/exit"]
     });
     const missionId = result.stdout.match(/Mission (m_[^\s]+)/)?.[1];
 
@@ -81,6 +82,24 @@ describe("interactive session", () => {
     expect(result.stdout).toContain(`Timeline for ${missionId}`);
     expect(result.stdout).toContain("Report created");
     expect(result.stdout).toContain(`Replay for ${missionId}: Prepare launch checklist`);
+    expect(result.stdout).toContain(`Cost for ${missionId}`);
+    expect(result.stdout).toContain("model calls: 0");
+  });
+
+  it("supports model planning and cost summaries with current mission inference", async () => {
+    const cwd = await tempWorkspaceRoot();
+    await initWorkspace(cwd);
+
+    const result = await runInteractiveSession({
+      cwd,
+      inputLines: ['/mission "Prepare launch checklist"', "/plan --model", "/cost", "/exit"]
+    });
+    const missionId = result.stdout.match(/Mission (m_[^\s]+)/)?.[1];
+
+    expect(result.exitCode).toBe(0);
+    expect(missionId).toBeDefined();
+    expect(result.stdout).toContain(`Plan for ${missionId} (model)`);
+    expect(result.stdout).toContain("model calls: 1");
   });
 
   it("creates and approves a filesystem.write approval inside interactive mode", async () => {

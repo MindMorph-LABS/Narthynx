@@ -16,7 +16,8 @@ Narthynx is built in phases. Each phase must leave the repo runnable and testabl
 - Phase 9: Complete
 - Phase 10: Complete
 - Phase 11: Complete
-- Phase 12: Next
+- Phase 12: Complete
+- Phase 13: Next
 - Phase 15: Post-MVP only
 
 ## Phases
@@ -35,8 +36,8 @@ Narthynx is built in phases. Each phase must leave the repo runnable and testabl
 | 9 | Replay | Complete | Make missions replayable from the ledger |
 | 10 | Interactive CLI/TUI | Complete | Create the mission-first interactive shell |
 | 11 | Shell and Git Connectors | Complete | Add carefully gated shell and Git operations |
-| 12 | Model Provider Abstraction | Next | Prepare model routing without locking to one provider |
-| 13 | Mission Executor Vertical Slice | Planned | Run the MVP flow end to end |
+| 12 | Model Provider Abstraction | Complete | Prepare model routing without locking to one provider |
+| 13 | Mission Executor Vertical Slice | Next | Run the MVP flow end to end |
 | 14 | Open-Source Polish | Planned | Prepare public repo quality, examples, docs, and release checklist |
 | 15 | Post-MVP SOTA Extensions | Post-MVP only | Explore advanced extensions after the mission runtime is solid |
 

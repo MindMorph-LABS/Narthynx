@@ -26,6 +26,11 @@ export interface MissionStore {
   readMissionLedger(id: string, options?: { allowMissing?: boolean }): Promise<LedgerEvent[]>;
   ensureMissionPlanGraph(id: string): Promise<PlanGraph>;
   readMissionPlanGraph(id: string): Promise<PlanGraph>;
+  updateMissionPlanGraph(
+    id: string,
+    graph: PlanGraph,
+    details?: { summary?: string; provider?: string; model?: string }
+  ): Promise<PlanGraph>;
 }
 
 export function createMissionStore(cwd = process.cwd()): MissionStore {
@@ -208,6 +213,37 @@ export function createMissionStore(cwd = process.cwd()): MissionStore {
     async readMissionPlanGraph(id) {
       await this.readMission(id);
       return readPlanGraph(graphFilePath(missionDirectory(paths.missionsDir, id)));
+    },
+
+    async updateMissionPlanGraph(id, graph, details = {}) {
+      const mission = await this.readMission(id);
+      const missionDir = missionDirectory(paths.missionsDir, id);
+      const now = new Date().toISOString();
+      const parsedGraph = await writePlanGraph(graphFilePath(missionDir), {
+        ...graph,
+        missionId: id,
+        updatedAt: now
+      });
+      const updated = missionSchema.parse({
+        ...mission,
+        planGraph: parsedGraph,
+        updatedAt: now
+      });
+      await writeMissionFile(missionDir, updated);
+      await appendLedgerEvent(ledgerFilePath(missionDir), {
+        missionId: id,
+        type: "plan.updated",
+        summary: details.summary ?? "Mission plan graph updated.",
+        details: {
+          nodeCount: parsedGraph.nodes.length,
+          edgeCount: parsedGraph.edges.length,
+          provider: details.provider,
+          model: details.model
+        },
+        timestamp: now
+      });
+
+      return parsedGraph;
     }
   };
 }

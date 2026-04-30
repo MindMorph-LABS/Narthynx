@@ -7,6 +7,7 @@ import type { ToolAction } from "../tools/types";
 export interface InteractiveStatusInput {
   policyMode?: WorkspacePolicy["mode"];
   mission?: Mission;
+  modelProvider?: string;
 }
 
 export function renderStatusLine(input: InteractiveStatusInput): string {
@@ -14,8 +15,9 @@ export function renderStatusLine(input: InteractiveStatusInput): string {
   const missionId = input.mission?.id ?? "none";
   const state = input.mission?.state ?? "none";
   const risk = input.mission?.riskProfile.level ?? "none";
+  const model = input.modelProvider ?? "stub";
 
-  return `Narthynx  mode: ${mode}  mission: ${missionId}  state: ${state}  risk: ${risk}`;
+  return `Narthynx  mode: ${mode}  mission: ${missionId}  state: ${state}  risk: ${risk}  model: ${model}`;
 }
 
 export function renderPrompt(missionId?: string): string {
@@ -43,6 +45,7 @@ export function renderInteractiveHelp(): string {
     "/rewind <checkpoint-id> [mission-id]",
     "/report [mission-id]          Generate a deterministic report artifact",
     "/replay [mission-id]          Replay the mission story",
+    "/cost [mission-id]            Show model token and cost summary",
     "/policy                       Inspect policy.yaml",
     "/tools                        List typed tools",
     "/doctor                       Run workspace health checks",
