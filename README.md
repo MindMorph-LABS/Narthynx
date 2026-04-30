@@ -31,11 +31,11 @@ Implemented:
 - Phase 8: deterministic Markdown mission reports as durable artifacts.
 - Phase 9: replay rendering from the append-only ledger.
 - Phase 10: dependency-free interactive shell with status lines and slash commands.
+- Phase 11: approval-gated `shell.run` plus read-only `git.diff` and `git.log` connectors.
 
 Not implemented yet:
 
 - Mission graph execution.
-- Shell command execution.
 - Model provider routing and cost tracking.
 
 The CLI intentionally fails honestly for commands that belong to later phases.
@@ -156,7 +156,14 @@ Inside interactive mode, use slash commands for the same durable runtime:
 /help
 ```
 
-Shortcuts for shell execution, context attachment, and mission memory are intentionally future-facing in Phase 10. They print honest messages and do not run unsafe behavior.
+The `! <command>` shortcut requests approval for `shell.run`; it does not execute commands silently. Context attachment and mission memory shortcuts remain future-facing and print honest messages.
+
+Read-only Git connectors are available through typed tools:
+
+```bash
+pnpm narthynx tool <mission-id> git.diff --input "{}"
+pnpm narthynx tool <mission-id> git.log --input "{\"maxCount\":5}"
+```
 
 ## Workspace Files
 
@@ -207,6 +214,8 @@ Narthynx is designed around these defaults:
 
 Current MVP phases do not perform network calls, read credentials, send external communications, or execute arbitrary shell commands. Local writes are routed through typed tools, approval gates, ledger events, and checkpoints.
 
+Phase 11 includes local command execution only through approval-gated `shell.run` with `shell: false`, blocked metacharacters, blocked destructive patterns, workspace-bounded `cwd`, ledger events, and output artifacts.
+
 ## Development
 
 ```bash
@@ -240,6 +249,7 @@ The build follows the phased plan in `Narthynx_Codex_AGENTS.md`.
 10. Phase 9: Replay.
 11. Phase 10: Interactive CLI/TUI.
 12. Phase 11: Shell and Git connectors.
+13. Phase 12: Model provider abstraction.
 
 The first public demo is successful when a user can create a mission, inspect its plan, execute safe local actions, pause for risky approval, approve or deny, generate a report, and replay the mission timeline.
 

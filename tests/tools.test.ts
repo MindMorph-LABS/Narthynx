@@ -38,14 +38,20 @@ describe("tool registry", () => {
       "filesystem.list",
       "filesystem.read",
       "filesystem.write",
+      "git.diff",
+      "git.log",
       "git.status",
-      "report.write"
+      "report.write",
+      "shell.run"
     ]);
     expect(tools.map((tool) => `${tool.name}:${tool.sideEffect}:${tool.riskLevel}:${tool.requiresApproval}`)).toContain(
       "report.write:local_write:medium:true"
     );
     expect(tools.map((tool) => `${tool.name}:${tool.sideEffect}:${tool.riskLevel}:${tool.requiresApproval}`)).toContain(
       "filesystem.write:local_write:high:true"
+    );
+    expect(tools.map((tool) => `${tool.name}:${tool.sideEffect}:${tool.riskLevel}:${tool.requiresApproval}`)).toContain(
+      "shell.run:shell:high:true"
     );
   });
 
@@ -134,6 +140,30 @@ describe("tool runner", () => {
     }
   }, 15_000);
 
+  it("runs git.diff and git.log as read-only tools and handles non-repositories honestly", async () => {
+    const { cwd, mission } = await initializedMission();
+    const runner = createToolRunner({ cwd });
+    const diff = await runner.runTool({
+      missionId: mission.id,
+      toolName: "git.diff",
+      input: {}
+    });
+    const log = await runner.runTool({
+      missionId: mission.id,
+      toolName: "git.log",
+      input: { maxCount: 3 }
+    });
+
+    expect(diff.ok).toBe(true);
+    expect(log.ok).toBe(true);
+    if (diff.ok) {
+      expect(JSON.stringify(diff.output)).toContain("\"isRepository\":false");
+    }
+    if (log.ok) {
+      expect(JSON.stringify(log.output)).toContain("\"isRepository\":false");
+    }
+  }, 15_000);
+
   it("creates a pending approval for approval-required tools without writing files", async () => {
     const { cwd, store, mission } = await initializedMission();
     const runner = createToolRunner({ cwd });
@@ -177,6 +207,110 @@ describe("tool runner", () => {
     expect(ledger.at(-1)?.details).toMatchObject({
       status: "pending_approval"
     });
+  }, 15_000);
+
+  it("creates a pending approval for shell.run and does not execute before approval", async () => {
+    const { cwd, store, mission } = await initializedMission();
+    const runner = createToolRunner({ cwd });
+    const result = await runner.runTool({
+      missionId: mission.id,
+      toolName: "shell.run",
+      input: { command: process.execPath, args: ["--version"] }
+    });
+    const ledger = await store.readMissionLedger(mission.id);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.approvalId).toMatch(/^a_/);
+      expect(result.message).toContain("shell.run requires approval");
+    }
+    expect(ledger.at(-1)?.type).toBe("tool.denied");
+    expect(ledger.at(-1)?.details).toMatchObject({
+      status: "pending_approval"
+    });
+  }, 15_000);
+
+  it("executes approved shell.run once and writes an output artifact", async () => {
+    const { cwd, store, mission } = await initializedMission();
+    const runner = createToolRunner({ cwd });
+    const approvalStore = createApprovalStore(cwd);
+    const requested = await runner.runTool({
+      missionId: mission.id,
+      toolName: "shell.run",
+      input: { command: process.execPath, args: ["--version"] }
+    });
+    const approvalId = requested.ok ? undefined : requested.approvalId;
+
+    expect(approvalId).toBeDefined();
+    await approvalStore.decideApproval(approvalId ?? "", "approved");
+    const executed = await runner.runApprovedTool(approvalId ?? "");
+    const repeated = await runner.runApprovedTool(approvalId ?? "");
+    const ledger = await store.readMissionLedger(mission.id);
+
+    expect(executed.ok).toBe(true);
+    if (executed.ok) {
+      const output = executed.output as { stdout?: string; artifactPath?: string };
+      expect(output.stdout).toContain("v");
+      expect(output.artifactPath).toContain("artifacts/outputs/shell-run");
+      await expect(readFile(path.join(cwd, ".narthynx", "missions", mission.id, output.artifactPath ?? ""), "utf8")).resolves.toContain(
+        `command: ${process.execPath}`
+      );
+    }
+    expect(repeated.ok).toBe(false);
+    if (!repeated.ok) {
+      expect(repeated.message).toContain("already been executed");
+    }
+    expect(ledger.map((event) => event.type)).toContain("artifact.created");
+    expect(ledger.map((event) => event.type).slice(-3)).toEqual(["tool.started", "artifact.created", "tool.completed"]);
+  }, 15_000);
+
+  it("does not continue denied shell.run approvals", async () => {
+    const { cwd, mission } = await initializedMission();
+    const runner = createToolRunner({ cwd });
+    const approvalStore = createApprovalStore(cwd);
+    const requested = await runner.runTool({
+      missionId: mission.id,
+      toolName: "shell.run",
+      input: { command: process.execPath, args: ["--version"] }
+    });
+    const approvalId = requested.ok ? undefined : requested.approvalId;
+
+    expect(approvalId).toBeDefined();
+    await approvalStore.decideApproval(approvalId ?? "", "denied", "not now");
+    const result = await runner.runApprovedTool(approvalId ?? "");
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.message).toContain("denied");
+    }
+  }, 15_000);
+
+  it("blocks dangerous shell.run commands without creating approvals", async () => {
+    const { cwd, store, mission } = await initializedMission();
+    const runner = createToolRunner({ cwd });
+    const destructive = await runner.runTool({
+      missionId: mission.id,
+      toolName: "shell.run",
+      input: { command: "rm", args: ["-rf", "."] }
+    });
+    const metacharacter = await runner.runTool({
+      missionId: mission.id,
+      toolName: "shell.run",
+      input: { command: "echo", args: ["hello", "|", "sh"] }
+    });
+    const updatedMission = await store.readMission(mission.id);
+
+    expect(destructive.ok).toBe(false);
+    expect(metacharacter.ok).toBe(false);
+    if (!destructive.ok) {
+      expect(destructive.approvalId).toBeUndefined();
+      expect(destructive.message).toContain("blocked");
+    }
+    if (!metacharacter.ok) {
+      expect(metacharacter.approvalId).toBeUndefined();
+      expect(metacharacter.message).toContain("Shell metacharacters");
+    }
+    expect(updatedMission.approvals).toEqual([]);
   }, 15_000);
 
   it("continues approved filesystem.write with a checkpoint and prevents double execution", async () => {
@@ -282,6 +416,36 @@ describe("tool runner", () => {
     expect(ledger.at(-1)?.details).toMatchObject({
       status: "blocked"
     });
+  }, 15_000);
+
+  it("blocks shell.run when shell policy is block or mode is safe", async () => {
+    const { cwd, store, mission } = await initializedMission();
+    const policyPath = path.join(cwd, ".narthynx", "policy.yaml");
+    await writeFile(policyPath, defaultPolicyYaml().replace("shell: ask", "shell: block"), "utf8");
+    const shellBlocked = await createToolRunner({ cwd }).runTool({
+      missionId: mission.id,
+      toolName: "shell.run",
+      input: { command: process.execPath, args: ["--version"] }
+    });
+    await writeFile(policyPath, defaultPolicyYaml().replace("mode: ask", "mode: safe"), "utf8");
+    const safeBlocked = await createToolRunner({ cwd }).runTool({
+      missionId: mission.id,
+      toolName: "shell.run",
+      input: { command: process.execPath, args: ["--version"] }
+    });
+    const updatedMission = await store.readMission(mission.id);
+
+    expect(shellBlocked.ok).toBe(false);
+    expect(safeBlocked.ok).toBe(false);
+    if (!shellBlocked.ok) {
+      expect(shellBlocked.message).toContain("Shell tools are blocked by policy");
+      expect(shellBlocked.approvalId).toBeUndefined();
+    }
+    if (!safeBlocked.ok) {
+      expect(safeBlocked.message).toContain("Safe mode");
+      expect(safeBlocked.approvalId).toBeUndefined();
+    }
+    expect(updatedMission.approvals).toEqual([]);
   }, 15_000);
 
   it("records invalid input as a tool failure before execution", async () => {

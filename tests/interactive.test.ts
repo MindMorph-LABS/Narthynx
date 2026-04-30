@@ -111,14 +111,51 @@ describe("interactive session", () => {
     await expect(readFile(path.join(cwd, "launch.md"), "utf8")).resolves.toBe("ready\n");
   });
 
-  it("does not execute future shell, context, or memory shortcuts", async () => {
+  it("routes shell shortcuts to shell.run approvals without executing immediately", async () => {
+    const cwd = await tempWorkspaceRoot();
+    await initWorkspace(cwd);
     const result = await runInteractiveSession({
-      inputLines: ["! echo hi", "@ README.md", "# remember this", "/exit"]
+      cwd,
+      inputLines: ['/mission "Prepare launch checklist"', "! node --version", "/exit"]
     });
 
-    expect(result.stdout).toContain("Shell execution is reserved for Phase 11 and was not run.");
+    expect(result.stdout).toContain("shell.run requires approval");
+    expect(result.stdout).toContain("narthynx approve a_");
+  });
+
+  it("keeps context and memory shortcuts honest future work", async () => {
+    const result = await runInteractiveSession({
+      inputLines: ["@ README.md", "# remember this", "/exit"]
+    });
+
     expect(result.stdout).toContain("Context attachment shortcuts are reserved for a future context workflow");
     expect(result.stdout).toContain("Mission memory shortcuts are reserved for a future memory workflow");
+  });
+
+  it("executes approved shell.run from interactive approval", async () => {
+    const cwd = await tempWorkspaceRoot();
+    await initWorkspace(cwd);
+    const first = await runInteractiveSession({
+      cwd,
+      inputLines: [
+        '/mission "Prepare launch checklist"',
+        `/tool shell.run --input '${JSON.stringify({ command: process.execPath, args: ["--version"] })}'`,
+        "/exit"
+      ]
+    });
+    const approvalId = first.stdout.match(/approve (a_[^\s]+)/)?.[1];
+
+    expect(approvalId).toBeDefined();
+
+    const approved = await runInteractiveSession({
+      cwd,
+      inputLines: [`/approve ${approvalId}`, "/exit"]
+    });
+
+    expect(approved.exitCode).toBe(0);
+    expect(approved.stdout).toContain(`Approval approved: ${approvalId}`);
+    expect(approved.stdout).toContain("Approved action executed.");
+    expect(approved.stdout).toContain("artifacts/outputs/shell-run");
   });
 
   it("handles interrupt without mutating state", async () => {

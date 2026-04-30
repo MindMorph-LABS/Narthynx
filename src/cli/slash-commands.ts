@@ -59,6 +59,21 @@ export function parseSlashCommand(line: string): ParsedSlashCommand {
   };
 }
 
+export function parseShellShortcut(line: string): { command: string; args: string[] } {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith("!")) {
+    throw new Error("Shell shortcut must start with !.");
+  }
+
+  const tokens = tokenize(trimmed.slice(1).trim());
+  const [command, ...args] = tokens;
+  if (!command) {
+    throw new Error("Shell command is required after !.");
+  }
+
+  return { command, args };
+}
+
 export async function dispatchSlashCommand(
   command: ParsedSlashCommand,
   context: SlashCommandContext

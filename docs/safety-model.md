@@ -87,11 +87,11 @@ The MVP blocks or approval-gates behavior that can leave the local workspace or 
 
 - credential access
 - network access
-- shell execution
+- raw shell execution; typed `shell.run` is approval-gated and uses `shell: false`
 - external communication
 - production configuration changes
 - destructive filesystem changes
 - reading known secret-like files
 - sending sensitive local context to cloud models
 
-Future features may add typed workflows for some of these actions, but only with explicit policy, approval, ledger, and checkpoint behavior.
+Future features may add more typed workflows for some of these actions, but only with explicit policy, approval, ledger, and honest rollback/checkpoint behavior.

@@ -194,8 +194,11 @@ describe("Narthynx CLI", () => {
     expect(result.stdout).toContain("filesystem.list");
     expect(result.stdout).toContain("filesystem.read");
     expect(result.stdout).toContain("filesystem.write");
+    expect(result.stdout).toContain("git.diff");
+    expect(result.stdout).toContain("git.log");
     expect(result.stdout).toContain("git.status");
     expect(result.stdout).toContain("report.write");
+    expect(result.stdout).toContain("shell.run");
   });
 
   it("runs a read-only filesystem tool from the CLI", async () => {
@@ -450,6 +453,23 @@ describe("Narthynx CLI", () => {
     const result = await runCli(["pause", "m_missing"]);
 
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("not implemented in Phase 10");
+    expect(result.stderr).toContain("not implemented in Phase 11");
+  });
+
+  it("creates a pending approval for shell.run from the CLI", async () => {
+    const cwd = await tempWorkspaceRoot();
+    await runCli(["init"], { cwd });
+    const created = await runCli(["mission", "Prepare launch checklist"], { cwd });
+    const id = created.stdout.match(/id: (m_[^\s]+)/)?.[1];
+
+    expect(id).toBeDefined();
+    const result = await runCli(
+      ["tool", id ?? "", "shell.run", "--input", JSON.stringify({ command: process.execPath, args: ["--version"] })],
+      { cwd }
+    );
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("shell.run requires approval");
+    expect(result.stderr).toContain("narthynx approve a_");
   });
 });

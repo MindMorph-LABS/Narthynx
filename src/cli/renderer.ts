@@ -50,7 +50,7 @@ export function renderInteractiveHelp(): string {
     "/exit                         Exit interactive mode",
     "",
     "Shortcuts",
-    "! <command>                   Reserved for Phase 11 shell.run; not executed",
+    "! <command>                   Request approval for shell.run",
     "@ <path>                      Reserved for future context attachment",
     "# <note>                      Reserved for future mission memory"
   ].join("\n");
@@ -98,7 +98,7 @@ export function renderPolicy(policy: WorkspacePolicy, path: string): string {
     `external_communication: ${policy.external_communication}`,
     `credentials: ${policy.credentials}`,
     `cloud_model_sensitive_context: ${policy.cloud_model_sensitive_context}`,
-    "Policy editing is not implemented in Phase 10."
+    "Policy editing is not implemented yet."
   ].join("\n");
 }
 
