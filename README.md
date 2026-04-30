@@ -30,11 +30,11 @@ Implemented:
 - Phase 7: approval-gated filesystem writes with checkpoints and basic rewind.
 - Phase 8: deterministic Markdown mission reports as durable artifacts.
 - Phase 9: replay rendering from the append-only ledger.
+- Phase 10: dependency-free interactive shell with status lines and slash commands.
 
 Not implemented yet:
 
 - Mission graph execution.
-- Interactive TUI.
 - Shell command execution.
 - Model provider routing and cost tracking.
 
@@ -84,6 +84,19 @@ pnpm narthynx --help
 pnpm narthynx --version
 ```
 
+Open interactive mode:
+
+```bash
+pnpm narthynx
+```
+
+Interactive mode starts a mission-first shell:
+
+```txt
+Narthynx  mode: Ask  mission: none  state: none  risk: none
+nx>
+```
+
 Initialize a local workspace:
 
 ```bash
@@ -130,6 +143,20 @@ pnpm narthynx replay <mission-id>
 ```
 
 Approval-gated writes are available through typed tools and must be explicitly approved before execution.
+
+Inside interactive mode, use slash commands for the same durable runtime:
+
+```txt
+/mission "Prepare my launch checklist from this repo"
+/plan
+/tool filesystem.list --input '{"path":"."}'
+/timeline
+/report
+/replay
+/help
+```
+
+Shortcuts for shell execution, context attachment, and mission memory are intentionally future-facing in Phase 10. They print honest messages and do not run unsafe behavior.
 
 ## Workspace Files
 
@@ -212,6 +239,7 @@ The build follows the phased plan in `Narthynx_Codex_AGENTS.md`.
 9. Phase 8: Report generation.
 10. Phase 9: Replay.
 11. Phase 10: Interactive CLI/TUI.
+12. Phase 11: Shell and Git connectors.
 
 The first public demo is successful when a user can create a mission, inspect its plan, execute safe local actions, pause for risky approval, approve or deny, generate a report, and replay the mission timeline.
 
@@ -219,7 +247,7 @@ The first public demo is successful when a user can create a mission, inspect it
 
 ```txt
 src/
-  cli/       CLI entrypoint
+  cli/       CLI entrypoint, interactive shell, slash commands, terminal rendering
   config/    workspace defaults, YAML loading, init, doctor
   missions/  mission schema, store, ledger, graph, approvals, checkpoints, reports, replay
   tools/     typed tool definitions, registry, policy classification, runner

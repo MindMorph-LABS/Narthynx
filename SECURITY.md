@@ -4,7 +4,7 @@ Narthynx is an early-stage local-first agent runtime. Security defaults are part
 
 ## Current Phase
 
-Phase 9 is implemented. Narthynx can create durable local missions, append ledgers, run typed MVP tools, require approvals for local writes, create checkpoints, generate reports, rewind filesystem-write checkpoints, and replay mission ledgers.
+Phase 10 is implemented. Narthynx can create durable local missions, append ledgers, run typed MVP tools, require approvals for local writes, create checkpoints, generate reports, rewind filesystem-write checkpoints, replay mission ledgers, and operate through an interactive slash-command shell.
 
 It does not execute arbitrary shell commands, read credentials, call networks, or send external communications in the current MVP phases.
 
