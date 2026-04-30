@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { Command, CommanderError } from "commander";
 
 import { doctorWorkspace, initWorkspace, resolveWorkspacePaths } from "../config/workspace";
+import { runInteractiveSession } from "./interactive";
 import { createApprovalStore } from "../missions/approvals";
 import { createCheckpointStore } from "../missions/checkpoints";
 import { createReplayService } from "../missions/replay";
@@ -72,6 +73,7 @@ export interface CliResult {
 
 export interface CliOptions {
   cwd?: string;
+  interactiveInput?: string[];
 }
 
 interface CliIo {
@@ -84,13 +86,14 @@ const intro = [
   "An AI agent that runs missions, not chats.",
   "",
   "`narthynx init`, `doctor`, `mission`, `missions`, `open`, `plan`, `timeline`, `tools`, `tool`, `approve`, `rewind`, `report`, and `replay` are available in Phase 9.",
+  "Run `narthynx` in a terminal to open Phase 10 interactive mode.",
   "Mission execution is not implemented yet."
 ].join("\n");
 
 function notImplementedMessage(commandName: string): string {
   return [
-    `Command "narthynx ${commandName}" is not implemented in Phase 9.`,
-    "Phase 9 provides replay rendering over persisted mission ledgers."
+    `Command "narthynx ${commandName}" is not implemented in Phase 10.`,
+    "Phase 10 provides interactive slash commands over the persisted mission runtime."
   ].join("\n");
 }
 
@@ -119,13 +122,23 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
     "after",
     [
       "",
-      "Phase 9 status:",
-      "  Workspace init, missions, ledgers, plan graphs, typed tools, approval gates, filesystem writes, checkpoints, reports, and replay are implemented.",
+      "Phase 10 status:",
+      "  Workspace init, missions, ledgers, plan graphs, typed tools, approval gates, filesystem writes, checkpoints, reports, replay, and interactive slash commands are implemented.",
       "  Mission execution still fails honestly until its build phase lands."
     ].join("\n")
   );
 
-  program.action(() => {
+  program.action(async () => {
+    if (options.interactiveInput) {
+      const result = await runInteractiveSession({
+        cwd,
+        inputLines: options.interactiveInput,
+        io
+      });
+      process.exitCode = result.exitCode;
+      return;
+    }
+
     io.writeOut(`${intro}\n`);
   });
 
@@ -517,12 +530,18 @@ function writePathList(io: CliIo, label: string, paths: string[], stream: "out" 
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const result = await runCli(process.argv.slice(2));
-  if (result.stdout.length > 0) {
-    process.stdout.write(result.stdout);
+  const argv = process.argv.slice(2);
+  if (argv.length === 0) {
+    const result = await runInteractiveSession();
+    process.exitCode = result.exitCode;
+  } else {
+    const result = await runCli(argv);
+    if (result.stdout.length > 0) {
+      process.stdout.write(result.stdout);
+    }
+    if (result.stderr.length > 0) {
+      process.stderr.write(result.stderr);
+    }
+    process.exitCode = result.exitCode;
   }
-  if (result.stderr.length > 0) {
-    process.stderr.write(result.stderr);
-  }
-  process.exitCode = result.exitCode;
 }

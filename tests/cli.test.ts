@@ -450,6 +450,6 @@ describe("Narthynx CLI", () => {
     const result = await runCli(["pause", "m_missing"]);
 
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("not implemented in Phase 9");
+    expect(result.stderr).toContain("not implemented in Phase 10");
   });
 });

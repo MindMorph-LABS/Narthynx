@@ -118,7 +118,7 @@ export function createToolRunner(options: ToolRunnerOptions = {}) {
         return {
           ok: false,
           toolName: approval.toolName,
-          message: `${approval.toolName} continuation is not implemented in Phase 9.`,
+          message: `${approval.toolName} continuation is not implemented in Phase 10.`,
           blocked: true,
           approvalId
         };

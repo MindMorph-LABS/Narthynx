@@ -14,7 +14,8 @@ Narthynx is built in phases. Each phase must leave the repo runnable and testabl
 - Phase 7: Complete
 - Phase 8: Complete
 - Phase 9: Complete
-- Phase 10: Next
+- Phase 10: Complete
+- Phase 11: Next
 - Phase 15: Post-MVP only
 
 ## Phases
@@ -31,8 +32,8 @@ Narthynx is built in phases. Each phase must leave the repo runnable and testabl
 | 7 | Filesystem Write and Checkpoints | Complete | Support approval-gated local writes and basic rewind |
 | 8 | Report Generation | Complete | Generate mission reports as durable artifacts |
 | 9 | Replay | Complete | Make missions replayable from the ledger |
-| 10 | Interactive CLI/TUI | Next | Create the mission-first interactive shell |
-| 11 | Shell and Git Connectors | Planned | Add carefully gated shell and Git operations |
+| 10 | Interactive CLI/TUI | Complete | Create the mission-first interactive shell |
+| 11 | Shell and Git Connectors | Next | Add carefully gated shell and Git operations |
 | 12 | Model Provider Abstraction | Planned | Prepare model routing without locking to one provider |
 | 13 | Mission Executor Vertical Slice | Planned | Run the MVP flow end to end |
 | 14 | Open-Source Polish | Planned | Prepare public repo quality, examples, docs, and release checklist |
