@@ -120,6 +120,42 @@ describe("Narthynx CLI", () => {
     expect(result.stdout).toContain("6. [artifact] Generate final report - pending");
   });
 
+  it("regenerates a mission plan through the stub model provider and records cost", async () => {
+    const cwd = await tempWorkspaceRoot();
+    await runCli(["init"], { cwd });
+    const created = await runCli(["mission", "Prepare launch checklist"], { cwd });
+    const id = created.stdout.match(/id: (m_[^\s]+)/)?.[1];
+
+    expect(id).toBeDefined();
+    const result = await runCli(["plan", id ?? "", "--model"], { cwd });
+    const cost = await runCli(["cost", id ?? ""], { cwd });
+    const timeline = await runCli(["timeline", id ?? ""], { cwd });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain(`Plan for ${id} (model)`);
+    expect(cost.exitCode).toBe(0);
+    expect(cost.stdout).toContain("model calls: 1");
+    expect(cost.stdout).toContain("estimated cost: USD 0.000000");
+    expect(timeline.stdout).toContain("model.called");
+    expect(timeline.stdout).toContain("cost.recorded");
+    expect(timeline.stdout).toContain("plan.updated");
+  });
+
+  it("reports zero model cost for a fresh deterministic mission", async () => {
+    const cwd = await tempWorkspaceRoot();
+    await runCli(["init"], { cwd });
+    const created = await runCli(["mission", "Prepare launch checklist"], { cwd });
+    const id = created.stdout.match(/id: (m_[^\s]+)/)?.[1];
+
+    expect(id).toBeDefined();
+    const result = await runCli(["cost", id ?? ""], { cwd });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain(`Cost for ${id}`);
+    expect(result.stdout).toContain("model calls: 0");
+    expect(result.stdout).toContain("providers: none");
+  });
+
   it("fails clearly for a missing mission plan", async () => {
     const cwd = await tempWorkspaceRoot();
     await runCli(["init"], { cwd });
@@ -453,7 +489,38 @@ describe("Narthynx CLI", () => {
     const result = await runCli(["pause", "m_missing"]);
 
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("not implemented in Phase 11");
+    expect(result.stderr).toContain("not implemented in Phase 12");
+  });
+
+  it("fails model planning clearly when a cloud provider is configured but network policy is disabled", async () => {
+    const cwd = await tempWorkspaceRoot();
+    await runCli(["init"], { cwd });
+    const created = await runCli(["mission", "Prepare launch checklist"], { cwd });
+    const id = created.stdout.match(/id: (m_[^\s]+)/)?.[1];
+    const previous = {
+      provider: process.env.NARTHYNX_MODEL_PROVIDER,
+      baseUrl: process.env.NARTHYNX_OPENAI_BASE_URL,
+      apiKey: process.env.NARTHYNX_OPENAI_API_KEY,
+      model: process.env.NARTHYNX_OPENAI_MODEL
+    };
+
+    process.env.NARTHYNX_MODEL_PROVIDER = "openai-compatible";
+    process.env.NARTHYNX_OPENAI_BASE_URL = "https://models.example/v1";
+    process.env.NARTHYNX_OPENAI_API_KEY = "sk-test-secret";
+    process.env.NARTHYNX_OPENAI_MODEL = "planning-model";
+
+    try {
+      const result = await runCli(["plan", id ?? "", "--model"], { cwd });
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("allow_network is false");
+      expect(result.stderr).not.toContain("sk-test-secret");
+    } finally {
+      restoreEnv("NARTHYNX_MODEL_PROVIDER", previous.provider);
+      restoreEnv("NARTHYNX_OPENAI_BASE_URL", previous.baseUrl);
+      restoreEnv("NARTHYNX_OPENAI_API_KEY", previous.apiKey);
+      restoreEnv("NARTHYNX_OPENAI_MODEL", previous.model);
+    }
   });
 
   it("creates a pending approval for shell.run from the CLI", async () => {
@@ -473,3 +540,11 @@ describe("Narthynx CLI", () => {
     expect(result.stderr).toContain("narthynx approve a_");
   });
 });
+
+function restoreEnv(key: string, value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[key];
+  } else {
+    process.env[key] = value;
+  }
+}

@@ -3,6 +3,8 @@ import { fileURLToPath } from "node:url";
 
 import { Command, CommanderError } from "commander";
 
+import { createCostService } from "../agent/cost";
+import { createModelPlanner } from "../agent/model-planner";
 import { doctorWorkspace, initWorkspace, resolveWorkspacePaths } from "../config/workspace";
 import { runInteractiveSession } from "./interactive";
 import { createApprovalStore } from "../missions/approvals";
@@ -27,6 +29,7 @@ export const CLI_COMMANDS = [
   "approve",
   "rewind",
   "report",
+  "cost",
   "pause",
   "resume",
   "replay",
@@ -47,6 +50,7 @@ export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
     | "approve"
     | "rewind"
     | "report"
+    | "cost"
     | "replay"
     | "doctor"
   > =>
@@ -61,6 +65,7 @@ export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
     name !== "approve" &&
     name !== "rewind" &&
     name !== "report" &&
+    name !== "cost" &&
     name !== "replay" &&
     name !== "doctor"
 );
@@ -85,15 +90,15 @@ const intro = [
   "Narthynx is a local-first Mission Agent OS.",
   "An AI agent that runs missions, not chats.",
   "",
-  "`narthynx init`, `doctor`, `mission`, `missions`, `open`, `plan`, `timeline`, `tools`, `tool`, `approve`, `rewind`, `report`, and `replay` are available in Phase 11.",
+  "`narthynx init`, `doctor`, `mission`, `missions`, `open`, `plan`, `timeline`, `tools`, `tool`, `approve`, `rewind`, `report`, `replay`, and `cost` are available in Phase 12.",
   "Run `narthynx` in a terminal to open interactive mode.",
   "Mission execution is not implemented yet."
 ].join("\n");
 
 function notImplementedMessage(commandName: string): string {
   return [
-    `Command "narthynx ${commandName}" is not implemented in Phase 11.`,
-    "Phase 11 provides approval-gated shell.run plus read-only git.diff and git.log connectors."
+    `Command "narthynx ${commandName}" is not implemented in Phase 12.`,
+    "Phase 12 provides model provider abstraction, explicit model planning, and mission cost summaries."
   ].join("\n");
 }
 
@@ -104,6 +109,8 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
   const checkpointStore = createCheckpointStore(cwd);
   const reportService = createReportService(cwd);
   const replayService = createReplayService(cwd);
+  const costService = createCostService(cwd);
+  const modelPlanner = createModelPlanner(cwd);
   const toolRegistry = createToolRegistry();
   const toolRunner = createToolRunner({ cwd, registry: toolRegistry });
   const program = new Command();
@@ -122,8 +129,8 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
     "after",
     [
       "",
-      "Phase 11 status:",
-      "  Workspace init, missions, ledgers, plan graphs, typed tools, approval gates, filesystem writes, checkpoints, reports, replay, interactive slash commands, shell.run, git.diff, and git.log are implemented.",
+      "Phase 12 status:",
+      "  Workspace init, missions, ledgers, plan graphs, typed tools, approval gates, filesystem writes, checkpoints, reports, replay, interactive slash commands, shell.run, git.diff, git.log, model provider routing, and cost summaries are implemented.",
       "  Mission execution still fails honestly until its build phase lands."
     ].join("\n")
   );
@@ -261,13 +268,16 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
 
   program
     .command("plan")
-    .description("Show or create a mission plan graph. (Phase 4)")
+    .description("Show or create a mission plan graph. Use --model for explicit Phase 12 model planning.")
     .argument("<id>", "Mission ID")
-    .action(async (id: string) => {
+    .option("--model", "Regenerate the plan through the configured model provider")
+    .action(async (id: string, commandOptions: { model?: boolean }) => {
       try {
-        const graph = await missionStore.ensureMissionPlanGraph(id);
+        const graph = commandOptions.model
+          ? (await modelPlanner.generatePlan(id)).graph
+          : await missionStore.ensureMissionPlanGraph(id);
 
-        io.writeOut(`Plan for ${id}\n`);
+        io.writeOut(`Plan for ${id}${commandOptions.model ? " (model)" : ""}\n`);
         for (const [index, node] of graph.nodes.entries()) {
           io.writeOut(`${index + 1}. [${node.type}] ${node.title} - ${node.status}\n`);
         }
@@ -441,6 +451,18 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
     .action(async (missionId: string) => {
       try {
         io.writeOut(await replayService.renderMissionReplay(missionId));
+      } catch (error) {
+        writeCliError(io, error);
+      }
+    });
+
+  program
+    .command("cost")
+    .description("Show a mission model token and cost summary. (Phase 12)")
+    .argument("<mission-id>", "Mission ID")
+    .action(async (missionId: string) => {
+      try {
+        io.writeOut(await costService.renderMissionCost(missionId));
       } catch (error) {
         writeCliError(io, error);
       }

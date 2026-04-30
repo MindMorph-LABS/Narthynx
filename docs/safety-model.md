@@ -95,3 +95,14 @@ The MVP blocks or approval-gates behavior that can leave the local workspace or 
 - sending sensitive local context to cloud models
 
 Future features may add more typed workflows for some of these actions, but only with explicit policy, approval, ledger, and honest rollback/checkpoint behavior.
+
+## Model Providers
+
+Phase 12 adds model routing without weakening local-first defaults:
+
+- `stub` is the default provider and never uses network or API keys.
+- OpenAI-compatible providers are opt-in through environment variables only.
+- Networked model calls require `allow_network: true`.
+- Sensitive context is blocked or refused unless `cloud_model_sensitive_context: allow` is set.
+- API keys are read from environment variables and must not be written to ledgers, reports, replay output, or mission files.
+- Every successful model call records `model.called` and `cost.recorded` events so `/cost`, reports, and replay remain transparent.

@@ -39,3 +39,14 @@ Shell actions are not treated as reversible. Narthynx records what happened but 
 ## Anti-Goals
 
 Phase 11 does not add mutating Git commands, raw shell strings, network connectors, external communication, browser automation, or hosted execution.
+
+## Phase 12 Model Providers
+
+Model providers are not typed tools; they are routed through `src/agent/model-router.ts` and recorded in each mission ledger.
+
+- Default provider: `stub`, deterministic, local-only, zero cost.
+- Optional provider: OpenAI-compatible chat completions through Node `fetch`.
+- Required env for cloud provider: `NARTHYNX_MODEL_PROVIDER=openai-compatible`, `NARTHYNX_OPENAI_BASE_URL`, `NARTHYNX_OPENAI_API_KEY`, and `NARTHYNX_OPENAI_MODEL`.
+- Cloud calls require `allow_network: true`.
+- `/cost` and `narthynx cost <mission-id>` summarize model calls, tokens, estimated cost, and sensitive-context usage.
+- Phase 12 only wires model routing into explicit plan generation through `plan --model`; it does not execute missions autonomously.

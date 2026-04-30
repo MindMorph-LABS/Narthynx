@@ -1,5 +1,7 @@
 import { loadWorkspacePolicy } from "../config/load";
 import { doctorWorkspace, resolveWorkspacePaths } from "../config/workspace";
+import { createCostService } from "../agent/cost";
+import { createModelPlanner } from "../agent/model-planner";
 import { createApprovalStore } from "../missions/approvals";
 import { createCheckpointStore } from "../missions/checkpoints";
 import { createReplayService } from "../missions/replay";
@@ -116,6 +118,8 @@ export async function dispatchSlashCommand(
       return handleReportCommand(command.args, context, stores);
     case "replay":
       return handleReplayCommand(command.args, context, stores);
+    case "cost":
+      return handleCostCommand(command.args, context, stores);
     case "approve":
       return handleApproveCommand(command.args, context, stores);
     case "rewind":
@@ -135,6 +139,8 @@ function createInteractiveStores(cwd: string) {
     checkpointStore: createCheckpointStore(cwd),
     reportService: createReportService(cwd),
     replayService: createReplayService(cwd),
+    costService: createCostService(cwd),
+    modelPlanner: createModelPlanner(cwd),
     toolRegistry,
     toolRunner: createToolRunner({ cwd, registry: toolRegistry })
   };
@@ -168,14 +174,17 @@ async function handlePlanCommand(
   context: SlashCommandContext,
   stores: ReturnType<typeof createInteractiveStores>
 ): Promise<SlashCommandResult> {
-  const missionId = resolveMissionArgument(args, context.currentMissionId);
-  const graph = await stores.missionStore.ensureMissionPlanGraph(missionId);
+  const parsed = parsePlanArgs(args, context.currentMissionId);
+  const graph = parsed.useModel
+    ? (await stores.modelPlanner.generatePlan(parsed.missionId)).graph
+    : await stores.missionStore.ensureMissionPlanGraph(parsed.missionId);
 
   return stay(
-    [`Plan for ${missionId}`, ...graph.nodes.map((node, index) => `${index + 1}. [${node.type}] ${node.title} - ${node.status}`)].join(
-      "\n"
-    ),
-    missionId
+    [
+      `Plan for ${parsed.missionId}${parsed.useModel ? " (model)" : ""}`,
+      ...graph.nodes.map((node, index) => `${index + 1}. [${node.type}] ${node.title} - ${node.status}`)
+    ].join("\n"),
+    parsed.missionId
   );
 }
 
@@ -223,6 +232,15 @@ async function handleReplayCommand(
 ): Promise<SlashCommandResult> {
   const missionId = resolveMissionArgument(args, context.currentMissionId);
   return stay(await stores.replayService.renderMissionReplay(missionId), missionId);
+}
+
+async function handleCostCommand(
+  args: string[],
+  context: SlashCommandContext,
+  stores: ReturnType<typeof createInteractiveStores>
+): Promise<SlashCommandResult> {
+  const missionId = resolveMissionArgument(args, context.currentMissionId);
+  return stay(await stores.costService.renderMissionCost(missionId), missionId);
 }
 
 async function handleApproveCommand(
@@ -307,6 +325,24 @@ function resolveMissionArgument(args: string[], currentMissionId: string | undef
   }
 
   return args[0] ?? requireCurrentMission(currentMissionId);
+}
+
+function parsePlanArgs(args: string[], currentMissionId: string | undefined): { missionId: string; useModel: boolean } {
+  const remaining: string[] = [];
+  let useModel = false;
+
+  for (const arg of args) {
+    if (arg === "--model") {
+      useModel = true;
+    } else {
+      remaining.push(arg);
+    }
+  }
+
+  return {
+    missionId: resolveMissionArgument(remaining, currentMissionId),
+    useModel
+  };
 }
 
 function requireCurrentMission(currentMissionId: string | undefined): string {

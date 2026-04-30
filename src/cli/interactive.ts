@@ -223,7 +223,8 @@ async function writeStatus(session: InteractiveRuntime, io: InteractiveIo): Prom
   io.writeOut(
     `${renderStatusLine({
       policyMode: policy.ok ? policy.value.mode : undefined,
-      mission
+      mission,
+      modelProvider: process.env.NARTHYNX_MODEL_PROVIDER ?? "stub"
     })}\n`
   );
 }

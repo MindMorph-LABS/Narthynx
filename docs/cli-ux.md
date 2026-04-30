@@ -10,14 +10,14 @@ Running `narthynx` with no arguments opens interactive mode.
 Narthynx interactive
 Local-first Mission Agent OS. Persistent missions. Approval-gated actions. Replayable execution.
 Type /help for commands or /exit to leave.
-Narthynx  mode: Ask  mission: none  state: none  risk: none
+Narthynx  mode: Ask  mission: none  state: none  risk: none  model: stub
 nx>
 ```
 
 After selecting or creating a mission, the prompt shows the active mission:
 
 ```txt
-Narthynx  mode: Ask  mission: m_...  state: created  risk: low
+Narthynx  mode: Ask  mission: m_...  state: created  risk: low  model: stub
 nx:m_...>
 ```
 
@@ -31,13 +31,14 @@ Interactive mode supports:
 /mission <goal|mission-id>
 /mission
 /missions
-/plan [mission-id]
+/plan [mission-id] [--model]
 /timeline [mission-id]
 /tool [mission-id] <tool-name> --input <json>
 /approve [approval-id] [--deny] [--reason <text>]
 /rewind <checkpoint-id> [mission-id]
 /report [mission-id]
 /replay [mission-id]
+/cost [mission-id]
 /policy
 /tools
 /doctor
@@ -50,7 +51,9 @@ Commands that accept `[mission-id]` use the current mission when the argument is
 
 ## Safety Boundaries
 
-Interactive mode is a wrapper over existing typed runtime services. It does not introduce raw shell strings, network calls, model providers, external communication, or hidden state mutations.
+Interactive mode is a wrapper over existing typed runtime services. It does not introduce raw shell strings, automatic network calls, external communication, or hidden state mutations.
+
+`/plan --model` is explicit. With no provider environment variables, it uses the local deterministic stub provider and records model/cost ledger events. Cloud providers require provider env vars plus `allow_network: true`.
 
 Shortcuts:
 
