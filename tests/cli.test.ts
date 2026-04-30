@@ -144,6 +144,21 @@ describe("Narthynx CLI", () => {
     expect(result.stdout).toContain("mission.created");
   });
 
+  it("replays a newly created mission as a story", async () => {
+    const cwd = await tempWorkspaceRoot();
+    await runCli(["init"], { cwd });
+    const created = await runCli(["mission", "Prepare launch checklist"], { cwd });
+    const id = created.stdout.match(/id: (m_[^\s]+)/)?.[1];
+
+    expect(id).toBeDefined();
+    const result = await runCli(["replay", id ?? ""], { cwd });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain(`Replay for ${id}: Prepare launch checklist`);
+    expect(result.stdout).toContain("1. Mission created: Prepare launch checklist");
+    expect(result.stdout).toContain("2. Plan created: 6 nodes, 5 edges");
+  });
+
   it("generates a mission report from the CLI", async () => {
     const cwd = await tempWorkspaceRoot();
     await runCli(["init"], { cwd });
@@ -288,6 +303,36 @@ describe("Narthynx CLI", () => {
     expect(timelineAfterRewind.stdout).toContain("Checkpoint rewound");
   });
 
+  it("replays approvals, checkpoints, tool completion, rewinds, and report artifacts", async () => {
+    const cwd = await tempWorkspaceRoot();
+    await runCli(["init"], { cwd });
+    const created = await runCli(["mission", "Prepare launch checklist"], { cwd });
+    const id = created.stdout.match(/id: (m_[^\s]+)/)?.[1];
+
+    expect(id).toBeDefined();
+    const blocked = await runCli(
+      ["tool", id ?? "", "filesystem.write", "--input", "{\"path\":\"launch.md\",\"content\":\"ready\\n\"}"],
+      { cwd }
+    );
+    const approvalId = blocked.stderr.match(/approve (a_[^\s]+)/)?.[1];
+    const approved = await runCli(["approve", approvalId ?? ""], { cwd });
+    const checkpointId = approved.stdout.match(/checkpoint: (c_[^\s]+)/)?.[1];
+    await runCli(["rewind", id ?? "", checkpointId ?? ""], { cwd });
+    await runCli(["report", id ?? ""], { cwd });
+
+    const result = await runCli(["replay", id ?? ""], { cwd });
+
+    expect(approvalId).toBeDefined();
+    expect(checkpointId).toBeDefined();
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain(`Approval requested: filesystem.write (${approvalId})`);
+    expect(result.stdout).toContain(`Tool approved: filesystem.write (${approvalId})`);
+    expect(result.stdout).toContain(`Checkpoint created: launch.md (${checkpointId})`);
+    expect(result.stdout).toContain(`Tool completed: filesystem.write (${checkpointId})`);
+    expect(result.stdout).toContain(`Checkpoint rewound: launch.md (${checkpointId})`);
+    expect(result.stdout).toContain("Artifact created: artifacts/report.md");
+  });
+
   it("fails clearly for a missing checkpoint rewind", async () => {
     const cwd = await tempWorkspaceRoot();
     await runCli(["init"], { cwd });
@@ -360,6 +405,30 @@ describe("Narthynx CLI", () => {
     expect(result.stderr).toContain("Failed to read mission at");
   });
 
+  it("fails clearly for a missing mission replay", async () => {
+    const cwd = await tempWorkspaceRoot();
+    await runCli(["init"], { cwd });
+    const result = await runCli(["replay", "m_missing"], { cwd });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Failed to read mission at");
+  });
+
+  it("fails clearly for a malformed replay ledger", async () => {
+    const cwd = await tempWorkspaceRoot();
+    await runCli(["init"], { cwd });
+    const created = await runCli(["mission", "Prepare launch checklist"], { cwd });
+    const id = created.stdout.match(/id: (m_[^\s]+)/)?.[1];
+    const ledgerPath = path.join(cwd, ".narthynx", "missions", id ?? "", "ledger.jsonl");
+
+    expect(id).toBeDefined();
+    await writeFile(ledgerPath, "{not-json}\n", "utf8");
+    const result = await runCli(["replay", id ?? ""], { cwd });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain(`${ledgerPath}:1`);
+  });
+
   it("requires a mission goal", async () => {
     const cwd = await tempWorkspaceRoot();
     await runCli(["init"], { cwd });
@@ -378,9 +447,9 @@ describe("Narthynx CLI", () => {
   });
 
   it("fails honestly for later-phase placeholders", async () => {
-    const result = await runCli(["replay", "m_missing"]);
+    const result = await runCli(["pause", "m_missing"]);
 
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("not implemented in Phase 8");
+    expect(result.stderr).toContain("not implemented in Phase 9");
   });
 });

@@ -6,6 +6,7 @@ import { Command, CommanderError } from "commander";
 import { doctorWorkspace, initWorkspace, resolveWorkspacePaths } from "../config/workspace";
 import { createApprovalStore } from "../missions/approvals";
 import { createCheckpointStore } from "../missions/checkpoints";
+import { createReplayService } from "../missions/replay";
 import { createReportService } from "../missions/reports";
 import { createMissionStore, missionFilePath } from "../missions/store";
 import { createToolRegistry } from "../tools/registry";
@@ -45,6 +46,7 @@ export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
     | "approve"
     | "rewind"
     | "report"
+    | "replay"
     | "doctor"
   > =>
     name !== "init" &&
@@ -58,6 +60,7 @@ export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
     name !== "approve" &&
     name !== "rewind" &&
     name !== "report" &&
+    name !== "replay" &&
     name !== "doctor"
 );
 
@@ -80,14 +83,14 @@ const intro = [
   "Narthynx is a local-first Mission Agent OS.",
   "An AI agent that runs missions, not chats.",
   "",
-  "`narthynx init`, `doctor`, `mission`, `missions`, `open`, `plan`, `timeline`, `tools`, `tool`, `approve`, `rewind`, and `report` are available in Phase 8.",
-  "Mission execution and replay are not implemented yet."
+  "`narthynx init`, `doctor`, `mission`, `missions`, `open`, `plan`, `timeline`, `tools`, `tool`, `approve`, `rewind`, `report`, and `replay` are available in Phase 9.",
+  "Mission execution is not implemented yet."
 ].join("\n");
 
 function notImplementedMessage(commandName: string): string {
   return [
-    `Command "narthynx ${commandName}" is not implemented in Phase 8.`,
-    "Phase 8 provides deterministic mission report artifacts."
+    `Command "narthynx ${commandName}" is not implemented in Phase 9.`,
+    "Phase 9 provides replay rendering over persisted mission ledgers."
   ].join("\n");
 }
 
@@ -97,6 +100,7 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
   const approvalStore = createApprovalStore(cwd);
   const checkpointStore = createCheckpointStore(cwd);
   const reportService = createReportService(cwd);
+  const replayService = createReplayService(cwd);
   const toolRegistry = createToolRegistry();
   const toolRunner = createToolRunner({ cwd, registry: toolRegistry });
   const program = new Command();
@@ -115,9 +119,9 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
     "after",
     [
       "",
-      "Phase 8 status:",
-      "  Workspace init, missions, ledgers, plan graphs, typed tools, approval gates, filesystem writes, checkpoints, and reports are implemented.",
-      "  Mission execution and replay still fail honestly until their build phases land."
+      "Phase 9 status:",
+      "  Workspace init, missions, ledgers, plan graphs, typed tools, approval gates, filesystem writes, checkpoints, reports, and replay are implemented.",
+      "  Mission execution still fails honestly until its build phase lands."
     ].join("\n")
   );
 
@@ -417,6 +421,18 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
       }
     });
 
+  program
+    .command("replay")
+    .description("Replay a mission ledger as a human-readable mission story. (Phase 9)")
+    .argument("<mission-id>", "Mission ID")
+    .action(async (missionId: string) => {
+      try {
+        io.writeOut(await replayService.renderMissionReplay(missionId));
+      } catch (error) {
+        writeCliError(io, error);
+      }
+    });
+
   for (const commandName of PLACEHOLDER_COMMANDS) {
     program
       .command(commandName)
@@ -476,8 +492,7 @@ export async function runCli(argv: string[], options: CliOptions = {}): Promise<
 function placeholderDescription(commandName: (typeof PLACEHOLDER_COMMANDS)[number]): string {
   const descriptions: Record<(typeof PLACEHOLDER_COMMANDS)[number], string> = {
     pause: "Pause a mission. (Phase 2)",
-    resume: "Resume a mission. (Phase 2)",
-    replay: "Replay a mission ledger. (Phase 9)"
+    resume: "Resume a mission. (Phase 2)"
   };
 
   return descriptions[commandName];
