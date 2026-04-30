@@ -1,0 +1,49 @@
+name: Feature request
+description: Propose an improvement to the Narthynx mission runtime
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Describe the user or operator problem. Ground it in mission-native work, not generic chat behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the smallest useful implementation.
+    validations:
+      required: true
+  - type: checkboxes
+    id: identity
+    attributes:
+      label: Mission-runtime identity
+      options:
+        - label: This preserves local-first behavior.
+          required: true
+        - label: This preserves durable mission state, ledgers, approvals, artifacts, reports, or replay where relevant.
+          required: true
+        - label: This does not require unsafe hidden automation.
+          required: true
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      options:
+        - Current mission runtime
+        - Documentation or examples
+        - Post-MVP candidate
+        - Unsure
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: Safety and policy impact
+      description: Note shell, network, filesystem write, external communication, credential, model, approval, checkpoint, ledger, or replay implications.
+    validations:
+      required: true

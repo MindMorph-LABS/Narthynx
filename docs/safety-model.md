@@ -96,6 +96,14 @@ The MVP blocks or approval-gates behavior that can leave the local workspace or 
 
 Future features may add more typed workflows for some of these actions, but only with explicit policy, approval, ledger, and honest rollback/checkpoint behavior.
 
+## Shell And Git Connectors
+
+Phase 11 shell and Git connectors preserve the same safety contract:
+
+- `shell.run` is typed, approval-gated, uses `shell: false`, blocks command chaining and shell metacharacters, rejects known destructive patterns, and bounds `cwd` to the workspace.
+- `git.diff` and `git.log` are read-only. They should report repository failures honestly instead of fabricating clean output.
+- Shell output is captured as mission artifacts and ledger events. Shell actions are not treated as reversible.
+
 ## Model Providers
 
 Phase 12 adds model routing without weakening local-first defaults:
@@ -106,3 +114,19 @@ Phase 12 adds model routing without weakening local-first defaults:
 - Sensitive context is blocked or refused unless `cloud_model_sensitive_context: allow` is set.
 - API keys are read from environment variables and must not be written to ledgers, reports, replay output, or mission files.
 - Every successful model call records `model.called` and `cost.recorded` events so `/cost`, reports, and replay remain transparent.
+
+## Executor Boundary
+
+Phase 13 runs only the deterministic MVP graph slice. It may use read-only local tools, request approval for the report artifact step, resume after approval or denial, and complete with a deterministic report.
+
+It must not run arbitrary shell commands, choose tools from model output, send external communication, call networks, or write arbitrary user files.
+
+## Public Documentation Boundary
+
+Phase 14 examples and public docs must preserve the safety model:
+
+- no live secrets, tokens, private keys, or production data
+- no destructive commands
+- no fake screenshots or fabricated outputs
+- no unsupported autonomy claims
+- no instructions that bypass policy, approvals, ledgers, reports, or replay

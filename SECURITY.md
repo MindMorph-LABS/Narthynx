@@ -4,19 +4,32 @@ Narthynx is an early-stage local-first agent runtime. Security defaults are part
 
 ## Current Phase
 
-Phase 11 is implemented. Narthynx can create durable local missions, append ledgers, run typed MVP tools, require approvals for local writes and shell actions, create checkpoints, generate reports, rewind filesystem-write checkpoints, replay mission ledgers, operate through an interactive slash-command shell, and read Git diff/log state.
+The Phase 0-14 MVP track is implemented. Narthynx can create durable local missions, append ledgers, persist plan graphs, run typed tools, require approvals for local writes and shell actions, create checkpoints, generate reports, replay mission histories, operate through an interactive slash-command shell, summarize model costs, and run the bounded Phase 13 executor flow.
 
-It does not execute arbitrary raw shell strings, read credentials, call networks, or send external communications in the current MVP phases. Local command execution is limited to typed approval-gated `shell.run` with `shell: false`, blocked destructive patterns, blocked shell metacharacters, and workspace-bounded working directories.
+Narthynx does not execute arbitrary raw shell strings, read credentials by default, call networks by default, send external communications, or perform model-selected autonomous tool execution in the current MVP.
 
 ## Security Principles
 
 - No irreversible action without explicit approval.
 - No credential access by default.
-- No shell execution in auto mode.
-- No network by default in the MVP.
+- No raw shell execution.
+- No network by default.
+- No external communication without approval.
 - Every tool call must be logged.
-- Every high-risk local write must require approval and checkpointing.
+- Every approval outcome must be recorded.
+- High-risk local writes must require approval and checkpointing where supported.
+- Secrets must not be written to mission files, ledgers, reports, replay output, examples, or tests.
+
+## Current Safety Boundaries
+
+- `shell.run` is typed, approval-gated, uses `shell: false`, blocks shell metacharacters and destructive patterns, and restricts `cwd` to the workspace root or descendants.
+- `git.diff` and `git.log` are read-only connectors.
+- Cloud model providers are opt-in through environment variables and require `allow_network: true`.
+- Sensitive model context is blocked or refused unless policy explicitly allows it.
+- The Phase 13 executor only runs the deterministic MVP graph slice: read-only inspection, approval pause/resume, deterministic report generation, and replayable completion.
 
 ## Reporting Issues
 
-Please report suspected vulnerabilities privately to the maintainers. Do not include live credentials, private keys, or sensitive production data in reports.
+Please report suspected vulnerabilities privately to the maintainers. Do not include live credentials, private keys, tokens, sensitive production data, or exploit details in public issues.
+
+For public issues, describe the affected command, policy setting, mission state, and expected safety behavior without sharing secrets.

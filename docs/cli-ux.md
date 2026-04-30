@@ -23,6 +23,8 @@ nx:m_...>
 
 The current mission is session-local. It is not persisted as hidden state.
 
+For non-TTY scripted tests, interactive mode uses injectable input so test runs do not hang.
+
 ## Slash Commands
 
 Interactive mode supports:
@@ -74,6 +76,30 @@ The Phase 13 executor does not use `!` or shell tools. It only uses deterministi
 
 `/policy` is read-only. Policy edits need a future typed update workflow so safety defaults are not weakened casually.
 
+## External CLI Flow
+
+The documented Phase 14 demo path should stay copyable:
+
+```bash
+pnpm narthynx init
+pnpm narthynx mission "Prepare launch checklist"
+pnpm narthynx plan <mission-id>
+pnpm narthynx run <mission-id>
+pnpm narthynx approve <approval-id>
+pnpm narthynx resume <mission-id>
+pnpm narthynx report <mission-id>
+pnpm narthynx replay <mission-id>
+```
+
+The denial path is also valid:
+
+```bash
+pnpm narthynx approve <approval-id> --deny
+pnpm narthynx resume <mission-id>
+```
+
+Denied executor approvals do not execute the gated write, but the mission can still finish with the denial recorded in the ledger, report, and replay.
+
 ## Error Handling
 
 Failures must be copyable and specific:
@@ -82,3 +108,7 @@ Failures must be copyable and specific:
 - Missing workspace tells the user to run `narthynx init`.
 - Approval denial records the denial and does not execute the action.
 - Ctrl+C exits without pretending any command succeeded.
+
+## Public UX Documentation
+
+README snippets, examples, and screenshots should show real terminal output from the current CLI. Placeholder visuals are allowed only when they are clearly labeled as placeholders and do not imply unsupported behavior.

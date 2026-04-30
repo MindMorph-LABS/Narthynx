@@ -1,6 +1,6 @@
 # Contributing to Narthynx
 
-Narthynx is built in small, testable phases. Contributions should preserve the mission-native product identity and keep the project runnable after every change.
+Narthynx is a local-first Mission Agent OS. Contributions should preserve the mission-native product identity: durable missions, transparent ledgers, approval-gated actions, checkpoints, artifacts, reports, and replayable execution.
 
 ## Local Setup
 
@@ -8,17 +8,72 @@ Narthynx is built in small, testable phases. Contributions should preserve the m
 pnpm install
 pnpm build
 pnpm test
+pnpm lint
 ```
 
-## Contribution Rules
+Run the CLI from source:
 
+```bash
+pnpm narthynx --help
+pnpm narthynx init
+pnpm narthynx doctor
+```
+
+## Before You Open a PR
+
+- Read `Narthynx_Codex_AGENTS.md`.
+- Keep the change inside the current phase or explicitly documented scope.
 - Preserve local-first behavior.
 - Do not hide failures or fake completed actions.
 - Do not weaken safety defaults.
-- Add or update tests with each feature.
-- Prefer explicit schemas and durable, human-readable state.
-- Keep runtime behavior aligned with `Narthynx_Codex_AGENTS.md`.
+- Add or update tests for behavior changes.
+- Update docs when commands, policy, ledger events, reports, replay, tools, or examples change.
+- Keep examples free of secrets, production data, destructive commands, and unsupported autonomy claims.
+
+## Branches and Commits
+
+Use focused branches and small commits when possible. A good PR should explain:
+
+- what mission-runtime capability changed
+- what safety behavior changed, if any
+- how ledger, replay, reports, approvals, or artifacts are affected
+- which commands verified the change
 
 ## Phase Discipline
 
-Do not jump to post-MVP integrations before the mission runtime works. The current roadmap prioritizes workspace init, mission schema, ledger, plan graph, typed tools, approvals, reports, replay, and then interactive UX.
+The MVP through Phase 14 is implemented. Phase 15 and later work is post-MVP and should not be smuggled into unrelated changes.
+
+Post-MVP integrations such as browser automation, MCP, GitHub, external communication, hosted sync, or team collaboration must wait until they can be implemented as typed tools or services with schemas, policy, approval behavior, ledger events, tests, and honest documentation.
+
+## Testing Expectations
+
+Run the checks that match the change:
+
+```bash
+pnpm test
+pnpm build
+pnpm lint
+pnpm pack --dry-run
+```
+
+For CLI behavior, include the command you ran and the relevant output. For mission-runtime changes, verify restart-safe persistence where applicable.
+
+## Documentation Expectations
+
+Update docs when changing:
+
+- CLI commands or slash commands
+- mission schema or graph behavior
+- ledger event families
+- tools or connector behavior
+- policy and approval behavior
+- reports, replay, cost summaries, or artifacts
+- public examples or release instructions
+
+Public docs should be honest about current behavior and clear about post-MVP limitations.
+
+## Security
+
+Do not include live credentials, private keys, tokens, `.env` contents, production data, or sensitive logs in issues, PRs, examples, fixtures, ledgers, reports, or replay output.
+
+Report suspected vulnerabilities through `SECURITY.md` rather than public issues.

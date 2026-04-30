@@ -18,7 +18,7 @@ Narthynx is built in phases. Each phase must leave the repo runnable and testabl
 - Phase 11: Complete
 - Phase 12: Complete
 - Phase 13: Complete
-- Phase 14: Next
+- Phase 14: Complete
 - Phase 15: Post-MVP only
 
 ## Phases
@@ -39,7 +39,7 @@ Narthynx is built in phases. Each phase must leave the repo runnable and testabl
 | 11 | Shell and Git Connectors | Complete | Add carefully gated shell and Git operations |
 | 12 | Model Provider Abstraction | Complete | Prepare model routing without locking to one provider |
 | 13 | Mission Executor Vertical Slice | Complete | Run the MVP flow end to end |
-| 14 | Open-Source Polish | Next | Prepare public repo quality, examples, docs, and release checklist |
+| 14 | Open-Source Polish | Complete | Prepare public repo quality, examples, docs, issue templates, and release checklist |
 | 15 | Post-MVP SOTA Extensions | Post-MVP only | Explore advanced extensions after the mission runtime is solid |
 
 ## MVP Success Definition
@@ -55,9 +55,11 @@ The first public demo is successful when this exact flow works:
 7. Narthynx creates a final report.
 8. User replays the mission timeline.
 
+Phase 13 implements this bounded flow. Phase 14 makes it understandable and repeatable for new contributors.
+
 ## Post-MVP Candidates
 
-Do not start these before the MVP is complete:
+Do not start these before the MVP is complete and stable:
 
 - local web cockpit
 - visual mission graph
@@ -72,3 +74,5 @@ Do not start these before the MVP is complete:
 - cloud/local hybrid execution
 - safe team collaboration
 - encrypted mission vault
+
+Post-MVP work must preserve the same invariants: local-first operation, durable state, typed tools, approval-gated risk, transparent ledgers, reports, and replay.

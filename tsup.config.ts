@@ -7,8 +7,5 @@ export default defineConfig({
   dts: true,
   sourcemap: true,
   target: "node20",
-  splitting: false,
-  banner: {
-    js: "#!/usr/bin/env node"
-  }
+  splitting: false
 });

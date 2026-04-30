@@ -3,9 +3,23 @@
   "version": "0.1.0",
   "description": "A local-first Mission Agent OS.",
   "type": "module",
+  "packageManager": "pnpm@10.12.4",
   "bin": {
     "narthynx": "./dist/index.js"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "SECURITY.md",
+    "CODE_OF_CONDUCT.md",
+    "CONTRIBUTING.md",
+    "AGENTS.md",
+    "Narthynx_Codex_AGENTS.md",
+    "docs",
+    "examples"
+  ],
   "scripts": {
     "build": "tsup",
     "test": "vitest run",
@@ -17,8 +31,19 @@
     "agents",
     "cli",
     "mission-runtime",
-    "local-first"
+    "local-first",
+    "approval-gates",
+    "agent-runtime",
+    "replay"
   ],
+  "homepage": "https://github.com/MindMorph-LABS/Narthyx#readme",
+  "bugs": {
+    "url": "https://github.com/MindMorph-LABS/Narthyx/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MindMorph-LABS/Narthyx.git"
+  },
   "license": "Apache-2.0",
   "engines": {
     "node": ">=20"
