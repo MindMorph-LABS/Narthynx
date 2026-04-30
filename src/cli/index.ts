@@ -3,7 +3,11 @@ import { fileURLToPath } from "node:url";
 
 import { Command, CommanderError } from "commander";
 
-import { doctorWorkspace, initWorkspace, resolveWorkspacePaths } from "../config/workspace";
+import {
+  doctorWorkspace,
+  initWorkspace,
+  resolveWorkspacePaths
+} from "../config/workspace";
 import { createApprovalStore } from "../missions/approvals";
 import { createCheckpointStore } from "../missions/checkpoints";
 import { createReportService } from "../missions/reports";
@@ -32,7 +36,9 @@ export const CLI_COMMANDS = [
 ] as const;
 
 export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
-  (name): name is Exclude<
+  (
+    name
+  ): name is Exclude<
     (typeof CLI_COMMANDS)[number],
     | "init"
     | "mission"
@@ -45,6 +51,7 @@ export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
     | "approve"
     | "rewind"
     | "report"
+    | "replay"
     | "doctor"
   > =>
     name !== "init" &&
@@ -58,6 +65,7 @@ export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
     name !== "approve" &&
     name !== "rewind" &&
     name !== "report" &&
+    name !== "replay" &&
     name !== "doctor"
 );
 
@@ -137,7 +145,9 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
 
       if (result.failed.length > 0) {
         writePathList(io, "failed", result.failed, "err");
-        io.writeErr("Workspace init failed. State was preserved where possible.\n");
+        io.writeErr(
+          "Workspace init failed. State was preserved where possible.\n"
+        );
         process.exitCode = 1;
         return;
       }
@@ -153,7 +163,9 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
 
       io.writeOut("Narthynx doctor\n");
       for (const check of result.checks) {
-        io.writeOut(`${check.ok ? "ok" : "fail"}  ${check.name}: ${check.message}\n`);
+        io.writeOut(
+          `${check.ok ? "ok" : "fail"}  ${check.name}: ${check.message}\n`
+        );
       }
 
       if (!result.ok) {
@@ -173,7 +185,9 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
       const goal = goalParts.join(" ").trim();
 
       if (goal.length === 0) {
-        io.writeErr("Mission goal is required.\nUsage: narthynx mission \"Prepare my launch checklist\"\n");
+        io.writeErr(
+          'Mission goal is required.\nUsage: narthynx mission "Prepare my launch checklist"\n'
+        );
         process.exitCode = 1;
         return;
       }
@@ -186,7 +200,9 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
         io.writeOut(`id: ${mission.id}\n`);
         io.writeOut(`title: ${mission.title}\n`);
         io.writeOut(`state: ${mission.state}\n`);
-        io.writeOut(`path: ${missionFilePath(paths.missionsDir, mission.id)}\n`);
+        io.writeOut(
+          `path: ${missionFilePath(paths.missionsDir, mission.id)}\n`
+        );
       } catch (error) {
         writeCliError(io, error);
       }
@@ -206,7 +222,9 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
 
         io.writeOut("Missions\n");
         for (const mission of missions) {
-          io.writeOut(`${mission.id}  ${mission.state}  ${mission.createdAt}  ${mission.title}\n`);
+          io.writeOut(
+            `${mission.id}  ${mission.state}  ${mission.createdAt}  ${mission.title}\n`
+          );
         }
       } catch (error) {
         writeCliError(io, error);
@@ -230,10 +248,14 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
         for (const criterion of mission.successCriteria) {
           io.writeOut(`  - ${criterion}\n`);
         }
-        io.writeOut(`risk: ${mission.riskProfile.level} (${mission.riskProfile.reasons.join("; ")})\n`);
+        io.writeOut(
+          `risk: ${mission.riskProfile.level} (${mission.riskProfile.reasons.join("; ")})\n`
+        );
         io.writeOut(`created: ${mission.createdAt}\n`);
         io.writeOut(`updated: ${mission.updatedAt}\n`);
-        io.writeOut(`path: ${missionFilePath(paths.missionsDir, mission.id)}\n`);
+        io.writeOut(
+          `path: ${missionFilePath(paths.missionsDir, mission.id)}\n`
+        );
         io.writeOut(`plan: narthynx plan ${mission.id}\n`);
         io.writeOut(`report: narthynx report ${mission.id}\n`);
         io.writeOut(`timeline: narthynx timeline ${mission.id}\n`);
@@ -252,7 +274,9 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
 
         io.writeOut(`Plan for ${id}\n`);
         for (const [index, node] of graph.nodes.entries()) {
-          io.writeOut(`${index + 1}. [${node.type}] ${node.title} - ${node.status}\n`);
+          io.writeOut(
+            `${index + 1}. [${node.type}] ${node.title} - ${node.status}\n`
+          );
         }
       } catch (error) {
         writeCliError(io, error);
@@ -266,7 +290,9 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
     .action(async (id: string) => {
       try {
         await missionStore.readMission(id);
-        const events = await missionStore.readMissionLedger(id, { allowMissing: true });
+        const events = await missionStore.readMissionLedger(id, {
+          allowMissing: true
+        });
 
         if (events.length === 0) {
           io.writeOut(`No ledger events found for mission ${id}.\n`);
@@ -275,7 +301,9 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
 
         io.writeOut(`Timeline for ${id}\n`);
         for (const [index, event] of events.entries()) {
-          io.writeOut(`${index + 1}. ${event.timestamp}  ${event.type}  ${event.summary}\n`);
+          io.writeOut(
+            `${index + 1}. ${event.timestamp}  ${event.type}  ${event.summary}\n`
+          );
         }
       } catch (error) {
         writeCliError(io, error);
@@ -300,36 +328,43 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
     .argument("<mission-id>", "Mission ID")
     .argument("<tool-name>", "Tool name")
     .requiredOption("--input <json>", "Tool input JSON")
-    .action(async (missionId: string, toolName: string, commandOptions: { input: string }) => {
-      let input: unknown;
+    .action(
+      async (
+        missionId: string,
+        toolName: string,
+        commandOptions: { input: string }
+      ) => {
+        let input: unknown;
 
-      try {
-        input = JSON.parse(commandOptions.input);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Invalid JSON";
-        io.writeErr(`Invalid --input JSON: ${message}\n`);
-        process.exitCode = 1;
-        return;
-      }
-
-      try {
-        const result = await toolRunner.runTool({
-          missionId,
-          toolName,
-          input
-        });
-
-        if (!result.ok) {
-          io.writeErr(`${result.message}\n`);
+        try {
+          input = JSON.parse(commandOptions.input);
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : "Invalid JSON";
+          io.writeErr(`Invalid --input JSON: ${message}\n`);
           process.exitCode = 1;
           return;
         }
 
-        io.writeOut(`${JSON.stringify(result.output, null, 2)}\n`);
-      } catch (error) {
-        writeCliError(io, error);
+        try {
+          const result = await toolRunner.runTool({
+            missionId,
+            toolName,
+            input
+          });
+
+          if (!result.ok) {
+            io.writeErr(`${result.message}\n`);
+            process.exitCode = 1;
+            return;
+          }
+
+          io.writeOut(`${JSON.stringify(result.output, null, 2)}\n`);
+        } catch (error) {
+          writeCliError(io, error);
+        }
       }
-    });
+    );
 
   program
     .command("approve")
@@ -337,52 +372,61 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
     .argument("[approval-id]", "Approval ID")
     .option("--deny", "Deny the approval instead of approving it")
     .option("--reason <text>", "Decision reason")
-    .action(async (approvalId: string | undefined, commandOptions: { deny?: boolean; reason?: string }) => {
-      try {
-        if (!approvalId) {
-          const approvals = await approvalStore.listPendingApprovals();
-          if (approvals.length === 0) {
-            io.writeOut("No pending approvals.\n");
-            return;
-          }
-
-          io.writeOut("Pending approvals\n");
-          for (const approval of approvals) {
-            io.writeOut(
-              `${approval.id}  mission=${approval.missionId}  tool=${approval.toolName}  risk=${approval.riskLevel}  status=${approval.status}\n`
-            );
-            io.writeOut(`  ${approval.prompt.split(/\r?\n/)[0]}\n`);
-          }
-          return;
-        }
-
-        const decision = commandOptions.deny ? "denied" : "approved";
-        const approval = await approvalStore.decideApproval(approvalId, decision, commandOptions.reason);
-        io.writeOut(`Approval ${approval.status}: ${approval.id}\n`);
-        io.writeOut(`mission: ${approval.missionId}\n`);
-        io.writeOut(`tool: ${approval.toolName}\n`);
-        if (approval.status === "approved") {
-          const continuation = await toolRunner.runApprovedTool(approval.id);
-          if (continuation.ok) {
-            io.writeOut("Approved action executed.\n");
-            if (continuation.checkpointId) {
-              io.writeOut(`checkpoint: ${continuation.checkpointId}\n`);
+    .action(
+      async (
+        approvalId: string | undefined,
+        commandOptions: { deny?: boolean; reason?: string }
+      ) => {
+        try {
+          if (!approvalId) {
+            const approvals = await approvalStore.listPendingApprovals();
+            if (approvals.length === 0) {
+              io.writeOut("No pending approvals.\n");
+              return;
             }
-            io.writeOut(`${JSON.stringify(continuation.output, null, 2)}\n`);
+
+            io.writeOut("Pending approvals\n");
+            for (const approval of approvals) {
+              io.writeOut(
+                `${approval.id}  mission=${approval.missionId}  tool=${approval.toolName}  risk=${approval.riskLevel}  status=${approval.status}\n`
+              );
+              io.writeOut(`  ${approval.prompt.split(/\r?\n/)[0]}\n`);
+            }
             return;
           }
 
-          io.writeOut(`${continuation.message}\n`);
-          if (approval.toolName === "filesystem.write") {
-            process.exitCode = 1;
+          const decision = commandOptions.deny ? "denied" : "approved";
+          const approval = await approvalStore.decideApproval(
+            approvalId,
+            decision,
+            commandOptions.reason
+          );
+          io.writeOut(`Approval ${approval.status}: ${approval.id}\n`);
+          io.writeOut(`mission: ${approval.missionId}\n`);
+          io.writeOut(`tool: ${approval.toolName}\n`);
+          if (approval.status === "approved") {
+            const continuation = await toolRunner.runApprovedTool(approval.id);
+            if (continuation.ok) {
+              io.writeOut("Approved action executed.\n");
+              if (continuation.checkpointId) {
+                io.writeOut(`checkpoint: ${continuation.checkpointId}\n`);
+              }
+              io.writeOut(`${JSON.stringify(continuation.output, null, 2)}\n`);
+              return;
+            }
+
+            io.writeOut(`${continuation.message}\n`);
+            if (approval.toolName === "filesystem.write") {
+              process.exitCode = 1;
+            }
+          } else {
+            io.writeOut("Recorded denial. The action was not executed.\n");
           }
-        } else {
-          io.writeOut("Recorded denial. The action was not executed.\n");
+        } catch (error) {
+          writeCliError(io, error);
         }
-      } catch (error) {
-        writeCliError(io, error);
       }
-    });
+    );
 
   program
     .command("rewind")
@@ -392,7 +436,10 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
     .action(async (missionId: string, checkpointId: string) => {
       try {
         await missionStore.readMission(missionId);
-        const result = await checkpointStore.rewindCheckpoint(missionId, checkpointId);
+        const result = await checkpointStore.rewindCheckpoint(
+          missionId,
+          checkpointId
+        );
         io.writeOut(`Checkpoint rewound: ${result.checkpoint.id}\n`);
         io.writeOut(`path: ${result.checkpoint.targetPath}\n`);
         io.writeOut(`file rollback: ${result.fileRollback ? "yes" : "no"}\n`);
@@ -409,9 +456,37 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
     .action(async (missionId: string) => {
       try {
         const result = await reportService.generateMissionReport(missionId);
-        io.writeOut(`${result.regenerated ? "Report regenerated" : "Report created"}\n`);
+        io.writeOut(
+          `${result.regenerated ? "Report regenerated" : "Report created"}\n`
+        );
         io.writeOut(`artifact: ${result.artifact.id}\n`);
         io.writeOut(`path: ${result.path}\n`);
+      } catch (error) {
+        writeCliError(io, error);
+      }
+    });
+
+  program
+    .command("replay")
+    .description("Replay a mission ledger. (Phase 9)")
+    .argument("<mission-id>", "Mission ID")
+    .action(async (missionId: string) => {
+      try {
+        const { createReplayService } = await import("../missions/replay");
+        const replayService = createReplayService();
+        const result = await replayService.replayMission(missionId, cwd);
+
+        if (result.events.length === 0) {
+          io.writeOut(`No ledger events found for mission ${missionId}.\n`);
+          return;
+        }
+
+        io.writeOut(`Replay for mission ${missionId}\n`);
+        for (const [index, event] of result.events.entries()) {
+          io.writeOut(
+            `${index + 1}. ${event.timestamp}  ${event.type}  ${event.summary}\n`
+          );
+        }
       } catch (error) {
         writeCliError(io, error);
       }
@@ -431,7 +506,10 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
   return program;
 }
 
-export async function runCli(argv: string[], options: CliOptions = {}): Promise<CliResult> {
+export async function runCli(
+  argv: string[],
+  options: CliOptions = {}
+): Promise<CliResult> {
   let stdout = "";
   let stderr = "";
   const originalExitCode = process.exitCode;
@@ -473,7 +551,9 @@ export async function runCli(argv: string[], options: CliOptions = {}): Promise<
   };
 }
 
-function placeholderDescription(commandName: (typeof PLACEHOLDER_COMMANDS)[number]): string {
+function placeholderDescription(
+  commandName: (typeof PLACEHOLDER_COMMANDS)[number]
+): string {
   const descriptions: Record<(typeof PLACEHOLDER_COMMANDS)[number], string> = {
     pause: "Pause a mission. (Phase 2)",
     resume: "Resume a mission. (Phase 2)",
@@ -489,7 +569,12 @@ function writeCliError(io: CliIo, error: unknown): void {
   process.exitCode = 1;
 }
 
-function writePathList(io: CliIo, label: string, paths: string[], stream: "out" | "err" = "out"): void {
+function writePathList(
+  io: CliIo,
+  label: string,
+  paths: string[],
+  stream: "out" | "err" = "out"
+): void {
   if (paths.length === 0) {
     return;
   }

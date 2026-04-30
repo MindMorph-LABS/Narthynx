@@ -23,7 +23,9 @@ describe("Narthynx CLI", () => {
   });
 
   it("prints a version matching package.json", async () => {
-    const packageJson = JSON.parse(await readFile("package.json", "utf8")) as { version: string };
+    const packageJson = JSON.parse(await readFile("package.json", "utf8")) as {
+      version: string;
+    };
     const result = await runCli(["--version"]);
 
     expect(result.exitCode).toBe(0);
@@ -36,9 +38,9 @@ describe("Narthynx CLI", () => {
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("Workspace is ready");
-    await expect(readFile(path.join(cwd, ".narthynx", "config.yaml"), "utf8")).resolves.toContain(
-      "workspace_version"
-    );
+    await expect(
+      readFile(path.join(cwd, ".narthynx", "config.yaml"), "utf8")
+    ).resolves.toContain("workspace_version");
   });
 
   it("reports an unhealthy workspace before init", async () => {
@@ -62,7 +64,9 @@ describe("Narthynx CLI", () => {
   it("creates a mission from the CLI", async () => {
     const cwd = await tempWorkspaceRoot();
     await runCli(["init"], { cwd });
-    const result = await runCli(["mission", "Prepare launch checklist"], { cwd });
+    const result = await runCli(["mission", "Prepare launch checklist"], {
+      cwd
+    });
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("Mission created");
@@ -70,9 +74,12 @@ describe("Narthynx CLI", () => {
     expect(result.stdout).toContain("state: created");
     const id = result.stdout.match(/id: (m_[^\s]+)/)?.[1];
     expect(id).toBeDefined();
-    await expect(readFile(path.join(cwd, ".narthynx", "missions", id ?? "", "ledger.jsonl"), "utf8")).resolves.toContain(
-      "mission.created"
-    );
+    await expect(
+      readFile(
+        path.join(cwd, ".narthynx", "missions", id ?? "", "ledger.jsonl"),
+        "utf8"
+      )
+    ).resolves.toContain("mission.created");
   });
 
   it("lists missions across separate CLI calls", async () => {
@@ -90,7 +97,9 @@ describe("Narthynx CLI", () => {
   it("opens a persisted mission summary", async () => {
     const cwd = await tempWorkspaceRoot();
     await runCli(["init"], { cwd });
-    const created = await runCli(["mission", "Prepare launch checklist"], { cwd });
+    const created = await runCli(["mission", "Prepare launch checklist"], {
+      cwd
+    });
     const id = created.stdout.match(/id: (m_[^\s]+)/)?.[1];
 
     expect(id).toBeDefined();
@@ -108,7 +117,9 @@ describe("Narthynx CLI", () => {
   it("prints a mission plan", async () => {
     const cwd = await tempWorkspaceRoot();
     await runCli(["init"], { cwd });
-    const created = await runCli(["mission", "Prepare launch checklist"], { cwd });
+    const created = await runCli(["mission", "Prepare launch checklist"], {
+      cwd
+    });
     const id = created.stdout.match(/id: (m_[^\s]+)/)?.[1];
 
     expect(id).toBeDefined();
@@ -117,7 +128,9 @@ describe("Narthynx CLI", () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain(`Plan for ${id}`);
     expect(result.stdout).toContain("1. [research] Understand goal - pending");
-    expect(result.stdout).toContain("6. [artifact] Generate final report - pending");
+    expect(result.stdout).toContain(
+      "6. [artifact] Generate final report - pending"
+    );
   });
 
   it("fails clearly for a missing mission plan", async () => {
@@ -132,7 +145,9 @@ describe("Narthynx CLI", () => {
   it("prints a mission timeline", async () => {
     const cwd = await tempWorkspaceRoot();
     await runCli(["init"], { cwd });
-    const created = await runCli(["mission", "Prepare launch checklist"], { cwd });
+    const created = await runCli(["mission", "Prepare launch checklist"], {
+      cwd
+    });
     const id = created.stdout.match(/id: (m_[^\s]+)/)?.[1];
 
     expect(id).toBeDefined();
@@ -147,12 +162,21 @@ describe("Narthynx CLI", () => {
   it("generates a mission report from the CLI", async () => {
     const cwd = await tempWorkspaceRoot();
     await runCli(["init"], { cwd });
-    const created = await runCli(["mission", "Prepare launch checklist"], { cwd });
+    const created = await runCli(["mission", "Prepare launch checklist"], {
+      cwd
+    });
     const id = created.stdout.match(/id: (m_[^\s]+)/)?.[1];
 
     expect(id).toBeDefined();
     const result = await runCli(["report", id ?? ""], { cwd });
-    const reportPath = path.join(cwd, ".narthynx", "missions", id ?? "", "artifacts", "report.md");
+    const reportPath = path.join(
+      cwd,
+      ".narthynx",
+      "missions",
+      id ?? "",
+      "artifacts",
+      "report.md"
+    );
     const timeline = await runCli(["timeline", id ?? ""], { cwd });
 
     expect(result.exitCode).toBe(0);
@@ -186,14 +210,19 @@ describe("Narthynx CLI", () => {
   it("runs a read-only filesystem tool from the CLI", async () => {
     const cwd = await tempWorkspaceRoot();
     await runCli(["init"], { cwd });
-    const created = await runCli(["mission", "Prepare launch checklist"], { cwd });
+    const created = await runCli(["mission", "Prepare launch checklist"], {
+      cwd
+    });
     const id = created.stdout.match(/id: (m_[^\s]+)/)?.[1];
 
     expect(id).toBeDefined();
-    const result = await runCli(["tool", id ?? "", "filesystem.list", "--input", "{\"path\":\".\"}"], { cwd });
+    const result = await runCli(
+      ["tool", id ?? "", "filesystem.list", "--input", '{"path":"."}'],
+      { cwd }
+    );
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("\"entries\"");
+    expect(result.stdout).toContain('"entries"');
   });
 
   it("reads safe files and refuses .env through the CLI", async () => {
@@ -201,12 +230,20 @@ describe("Narthynx CLI", () => {
     await runCli(["init"], { cwd });
     await writeFile(path.join(cwd, "notes.md"), "safe context\n", "utf8");
     await writeFile(path.join(cwd, ".env"), "TOKEN=secret\n", "utf8");
-    const created = await runCli(["mission", "Prepare launch checklist"], { cwd });
+    const created = await runCli(["mission", "Prepare launch checklist"], {
+      cwd
+    });
     const id = created.stdout.match(/id: (m_[^\s]+)/)?.[1];
 
     expect(id).toBeDefined();
-    const safe = await runCli(["tool", id ?? "", "filesystem.read", "--input", "{\"path\":\"notes.md\"}"], { cwd });
-    const blocked = await runCli(["tool", id ?? "", "filesystem.read", "--input", "{\"path\":\".env\"}"], { cwd });
+    const safe = await runCli(
+      ["tool", id ?? "", "filesystem.read", "--input", '{"path":"notes.md"}'],
+      { cwd }
+    );
+    const blocked = await runCli(
+      ["tool", id ?? "", "filesystem.read", "--input", '{"path":".env"}'],
+      { cwd }
+    );
 
     expect(safe.exitCode).toBe(0);
     expect(safe.stdout).toContain("safe context");
@@ -217,12 +254,20 @@ describe("Narthynx CLI", () => {
   it("creates a pending approval for approval-required tools from the CLI", async () => {
     const cwd = await tempWorkspaceRoot();
     await runCli(["init"], { cwd });
-    const created = await runCli(["mission", "Prepare launch checklist"], { cwd });
+    const created = await runCli(["mission", "Prepare launch checklist"], {
+      cwd
+    });
     const id = created.stdout.match(/id: (m_[^\s]+)/)?.[1];
 
     expect(id).toBeDefined();
     const result = await runCli(
-      ["tool", id ?? "", "report.write", "--input", "{\"path\":\"report.md\",\"content\":\"report\"}"],
+      [
+        "tool",
+        id ?? "",
+        "report.write",
+        "--input",
+        '{"path":"report.md","content":"report"}'
+      ],
       { cwd }
     );
 
@@ -234,12 +279,20 @@ describe("Narthynx CLI", () => {
   it("lists and approves pending approvals from the CLI", async () => {
     const cwd = await tempWorkspaceRoot();
     await runCli(["init"], { cwd });
-    const created = await runCli(["mission", "Prepare launch checklist"], { cwd });
+    const created = await runCli(["mission", "Prepare launch checklist"], {
+      cwd
+    });
     const id = created.stdout.match(/id: (m_[^\s]+)/)?.[1];
 
     expect(id).toBeDefined();
     const blocked = await runCli(
-      ["tool", id ?? "", "report.write", "--input", "{\"path\":\"report.md\",\"content\":\"report\"}"],
+      [
+        "tool",
+        id ?? "",
+        "report.write",
+        "--input",
+        '{"path":"report.md","content":"report"}'
+      ],
       { cwd }
     );
     const approvalId = blocked.stderr.match(/approve (a_[^\s]+)/)?.[1];
@@ -258,20 +311,33 @@ describe("Narthynx CLI", () => {
   it("approves filesystem.write, writes with a checkpoint, and rewinds the file", async () => {
     const cwd = await tempWorkspaceRoot();
     await runCli(["init"], { cwd });
-    const created = await runCli(["mission", "Prepare launch checklist"], { cwd });
+    const created = await runCli(["mission", "Prepare launch checklist"], {
+      cwd
+    });
     const id = created.stdout.match(/id: (m_[^\s]+)/)?.[1];
 
     expect(id).toBeDefined();
     const blocked = await runCli(
-      ["tool", id ?? "", "filesystem.write", "--input", "{\"path\":\"launch.md\",\"content\":\"ready\\n\"}"],
+      [
+        "tool",
+        id ?? "",
+        "filesystem.write",
+        "--input",
+        '{"path":"launch.md","content":"ready\\n"}'
+      ],
       { cwd }
     );
     const approvalId = blocked.stderr.match(/approve (a_[^\s]+)/)?.[1];
     const approved = await runCli(["approve", approvalId ?? ""], { cwd });
     const checkpointId = approved.stdout.match(/checkpoint: (c_[^\s]+)/)?.[1];
     const timelineAfterWrite = await runCli(["timeline", id ?? ""], { cwd });
-    const contentAfterWrite = await readFile(path.join(cwd, "launch.md"), "utf8");
-    const rewound = await runCli(["rewind", id ?? "", checkpointId ?? ""], { cwd });
+    const contentAfterWrite = await readFile(
+      path.join(cwd, "launch.md"),
+      "utf8"
+    );
+    const rewound = await runCli(["rewind", id ?? "", checkpointId ?? ""], {
+      cwd
+    });
     const timelineAfterRewind = await runCli(["timeline", id ?? ""], { cwd });
 
     expect(approvalId).toBeDefined();
@@ -284,14 +350,18 @@ describe("Narthynx CLI", () => {
     expect(timelineAfterWrite.stdout).toContain("tool.completed");
     expect(rewound.exitCode).toBe(0);
     expect(rewound.stdout).toContain("file rollback: yes");
-    await expect(readFile(path.join(cwd, "launch.md"), "utf8")).rejects.toThrow();
+    await expect(
+      readFile(path.join(cwd, "launch.md"), "utf8")
+    ).rejects.toThrow();
     expect(timelineAfterRewind.stdout).toContain("Checkpoint rewound");
   });
 
   it("fails clearly for a missing checkpoint rewind", async () => {
     const cwd = await tempWorkspaceRoot();
     await runCli(["init"], { cwd });
-    const created = await runCli(["mission", "Prepare launch checklist"], { cwd });
+    const created = await runCli(["mission", "Prepare launch checklist"], {
+      cwd
+    });
     const id = created.stdout.match(/id: (m_[^\s]+)/)?.[1];
     const result = await runCli(["rewind", id ?? "", "c_missing"], { cwd });
 
@@ -302,16 +372,27 @@ describe("Narthynx CLI", () => {
   it("denies pending approvals from the CLI", async () => {
     const cwd = await tempWorkspaceRoot();
     await runCli(["init"], { cwd });
-    const created = await runCli(["mission", "Prepare launch checklist"], { cwd });
+    const created = await runCli(["mission", "Prepare launch checklist"], {
+      cwd
+    });
     const id = created.stdout.match(/id: (m_[^\s]+)/)?.[1];
 
     expect(id).toBeDefined();
     const blocked = await runCli(
-      ["tool", id ?? "", "report.write", "--input", "{\"path\":\"report.md\",\"content\":\"report\"}"],
+      [
+        "tool",
+        id ?? "",
+        "report.write",
+        "--input",
+        '{"path":"report.md","content":"report"}'
+      ],
       { cwd }
     );
     const approvalId = blocked.stderr.match(/approve (a_[^\s]+)/)?.[1];
-    const denied = await runCli(["approve", approvalId ?? "", "--deny", "--reason", "not now"], { cwd });
+    const denied = await runCli(
+      ["approve", approvalId ?? "", "--deny", "--reason", "not now"],
+      { cwd }
+    );
     const timeline = await runCli(["timeline", id ?? ""], { cwd });
 
     expect(approvalId).toBeDefined();
@@ -323,23 +404,40 @@ describe("Narthynx CLI", () => {
   it("executes approved report.write under the mission artifacts directory", async () => {
     const cwd = await tempWorkspaceRoot();
     await runCli(["init"], { cwd });
-    const created = await runCli(["mission", "Prepare launch checklist"], { cwd });
+    const created = await runCli(["mission", "Prepare launch checklist"], {
+      cwd
+    });
     const id = created.stdout.match(/id: (m_[^\s]+)/)?.[1];
 
     expect(id).toBeDefined();
     const blocked = await runCli(
-      ["tool", id ?? "", "report.write", "--input", "{\"path\":\"report.md\",\"content\":\"approved report\"}"],
+      [
+        "tool",
+        id ?? "",
+        "report.write",
+        "--input",
+        '{"path":"report.md","content":"approved report"}'
+      ],
       { cwd }
     );
     const approvalId = blocked.stderr.match(/approve (a_[^\s]+)/)?.[1];
     const approved = await runCli(["approve", approvalId ?? ""], { cwd });
-    const reportPath = path.join(cwd, ".narthynx", "missions", id ?? "", "artifacts", "report.md");
+    const reportPath = path.join(
+      cwd,
+      ".narthynx",
+      "missions",
+      id ?? "",
+      "artifacts",
+      "report.md"
+    );
 
     expect(approvalId).toBeDefined();
     expect(approved.exitCode).toBe(0);
     expect(approved.stdout).toContain("Approved action executed");
     await expect(readFile(reportPath, "utf8")).resolves.toBe("approved report");
-    await expect(readFile(path.join(cwd, "report.md"), "utf8")).rejects.toThrow();
+    await expect(
+      readFile(path.join(cwd, "report.md"), "utf8")
+    ).rejects.toThrow();
   });
 
   it("fails clearly for a missing approval", async () => {
@@ -371,16 +469,20 @@ describe("Narthynx CLI", () => {
 
   it("guides users to initialize the workspace before creating missions", async () => {
     const cwd = await tempWorkspaceRoot();
-    const result = await runCli(["mission", "Prepare launch checklist"], { cwd });
+    const result = await runCli(["mission", "Prepare launch checklist"], {
+      cwd
+    });
 
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("Workspace is not initialized. Run: narthynx init");
+    expect(result.stderr).toContain(
+      "Workspace is not initialized. Run: narthynx init"
+    );
   });
 
-  it("fails honestly for later-phase placeholders", async () => {
+  it("fails honestly for non-existent missions", async () => {
     const result = await runCli(["replay", "m_missing"]);
 
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("not implemented in Phase 8");
+    expect(result.stderr).toContain("Failed to read mission");
   });
 });
