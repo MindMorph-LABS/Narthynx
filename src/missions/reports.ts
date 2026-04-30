@@ -148,7 +148,7 @@ function renderReport(input: {
     "",
     "## Limitations",
     "- Reports remain deterministic and local-only unless a future report workflow explicitly opts into model drafting.",
-    "- Mission execution, raw shell mode, and unrestricted network behavior are not implemented in this phase.",
+    "- Phase 13 mission execution is a bounded deterministic vertical slice; raw shell mode, autonomous tool choice, and unrestricted network behavior are not implemented.",
     "",
     "## Next Recommended Actions",
     "- Review this report against the mission goal and success criteria.",
