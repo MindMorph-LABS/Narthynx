@@ -90,6 +90,24 @@ Phase 13 executes the deterministic MVP graph only. It records node progress, ru
 
 It does not perform arbitrary model-authored tool execution, autonomous shell commands, external communication, network calls, or unbounded filesystem writes.
 
+## Phase 14 Contributor Contract
+
+Phase 14 does not add new runtime behavior. It makes the implemented mission model understandable to new contributors through public docs, examples, issue templates, and release guidance.
+
+Contributor-facing examples should demonstrate the same bounded flow:
+
+1. initialize a workspace
+2. create a mission
+3. inspect the plan
+4. run deterministic read-only nodes
+5. pause for approval
+6. approve or deny
+7. resume
+8. generate a report
+9. replay the ledger story
+
+Examples and docs must not imply raw shell autonomy, hidden network calls, arbitrary model-selected tools, or external communication.
+
 ## Ledger
 
 Every mission must have an append-only ledger. The ledger is the source of traceability and replay.
@@ -120,3 +138,27 @@ type LedgerEventType =
 ```
 
 The ledger must make `narthynx replay <mission-id>` possible. No hidden action should be missing from replay.
+
+## Durable Workspace Shape
+
+Mission state remains local and inspectable:
+
+```txt
+.narthynx/
+  config.yaml
+  policy.yaml
+  missions/
+    <mission-id>/
+      mission.yaml
+      graph.json
+      ledger.jsonl
+      approvals.json
+      context.md
+      artifacts/
+        report.md
+        outputs/
+        diffs/
+      checkpoints/
+```
+
+If a future change introduces a new mission file, it should be documented here and covered by tests that prove restart-safe behavior.

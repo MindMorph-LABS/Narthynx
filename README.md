@@ -10,32 +10,29 @@ An AI agent that runs missions, not chats. Persistent missions. Approval-gated a
 
 Most agent tools still treat serious work as a stream of chat messages and hidden tool calls. Narthynx is built around a different primitive: the durable **Mission**.
 
-A mission is an inspectable unit of work with a goal, success criteria, plan graph, action ledger, checkpoints, approvals, artifacts, reports, and replayable execution history. The product goal is useful autonomy that stays visible, resumable, approval-gated, and recoverable.
-
-Narthynx cannot guarantee perfect autonomous success. It makes agent work visible, resumable, approval-gated, and recoverable so users stay in control.
+A mission is an inspectable unit of work with a goal, success criteria, plan graph, action ledger, checkpoints, approvals, artifacts, reports, and replayable execution history. Narthynx cannot guarantee perfect autonomous success. It makes agent work visible, resumable, approval-gated, and recoverable so users stay in control.
 
 ## Current Status
 
-Narthynx is in early MVP construction.
+Narthynx has completed the Phase 0-14 MVP track described in `Narthynx_Codex_AGENTS.md`.
 
 Implemented:
 
-- Phase 0: TypeScript CLI bootstrap, tests, build tooling, and open-source project metadata.
-- Phase 1: local `.narthynx/` workspace initialization and doctor checks.
-- Phase 2: durable mission creation, listing, opening, persistence, and state transitions.
-- Phase 3: append-only mission ledger.
-- Phase 4: deterministic mission plan graph.
-- Phase 5: typed tool foundation for local reads, Git status, and report writes.
-- Phase 6: policy, risk classification, and approval queue.
-- Phase 7: approval-gated filesystem writes with checkpoints and basic rewind.
-- Phase 8: deterministic Markdown mission reports as durable artifacts.
-- Phase 9: replay rendering from the append-only ledger.
-- Phase 10: dependency-free interactive shell with status lines and slash commands.
-- Phase 11: approval-gated `shell.run` plus read-only `git.diff` and `git.log` connectors.
-- Phase 12: model provider abstraction with deterministic stub mode, optional OpenAI-compatible routing, model ledger events, and cost summaries.
-- Phase 13: bounded mission executor vertical slice with read-only steps, approval pause/resume, completion, reports, and replay.
+- TypeScript CLI foundation, tests, build tooling, and project metadata.
+- Local `.narthynx/` workspace initialization and doctor checks.
+- Durable mission creation, listing, opening, persistence, and state transitions.
+- Append-only mission ledger and raw timeline view.
+- Deterministic mission plan graph.
+- Typed tool runner for filesystem, Git, report, shell, and model-adjacent workflows.
+- Policy, risk classification, approval queue, checkpoints, and basic rewind.
+- Markdown mission reports, ledger replay, and model/cost summaries.
+- Dependency-free interactive shell with status lines and slash commands.
+- Approval-gated `shell.run` plus read-only `git.diff` and `git.log`.
+- Stub-first model provider abstraction with optional OpenAI-compatible routing.
+- Bounded mission executor vertical slice with read-only steps, approval pause/resume, final reports, and replay.
+- Open-source polish docs, examples, templates, and release checklist.
 
-The CLI intentionally fails honestly for commands that belong to later phases.
+Narthynx intentionally fails honestly for behavior outside the current runtime. It does not pretend later-phase integrations exist.
 
 ## What Narthynx Is
 
@@ -60,7 +57,7 @@ Narthynx is not:
 ## Requirements
 
 - Node.js 20+
-- pnpm
+- pnpm 10+
 
 ## Install
 
@@ -72,35 +69,23 @@ pnpm build
 pnpm test
 ```
 
-## Quickstart
-
-Show the CLI surface:
+Run the CLI from source:
 
 ```bash
 pnpm narthynx --help
 pnpm narthynx --version
 ```
 
-Open interactive mode:
-
-```bash
-pnpm narthynx
-```
-
-Interactive mode starts a mission-first shell:
-
-```txt
-Narthynx  mode: Ask  mission: none  state: none  risk: none  model: stub
-nx>
-```
+## Quickstart
 
 Initialize a local workspace:
 
 ```bash
 pnpm narthynx init
+pnpm narthynx doctor
 ```
 
-This creates:
+This creates local, human-readable state:
 
 ```txt
 .narthynx/
@@ -109,49 +94,63 @@ This creates:
   missions/
 ```
 
-Check workspace health:
-
-```bash
-pnpm narthynx doctor
-```
-
-Create a mission and inspect its durable state:
+Create a mission:
 
 ```bash
 pnpm narthynx mission "Prepare my launch checklist from this repo"
 pnpm narthynx missions
 pnpm narthynx open <mission-id>
 pnpm narthynx plan <mission-id>
-pnpm narthynx plan <mission-id> --model
-pnpm narthynx run <mission-id>
-pnpm narthynx timeline <mission-id>
 ```
 
-Run safe diagnostic tools through the typed tool runner:
+Run the bounded MVP executor:
 
 ```bash
-pnpm narthynx tools
-pnpm narthynx tool <mission-id> filesystem.list --input "{\"path\":\".\"}"
+pnpm narthynx run <mission-id>
 ```
 
-Generate the mission report and replay the mission story:
+The executor performs deterministic read-only inspection, then pauses before the approval-gated report artifact step:
+
+```txt
+Mission m_... is waiting for approval.
+Run: narthynx approve a_...
+Then: narthynx resume m_...
+```
+
+Approve or deny the gated action, then resume:
+
+```bash
+pnpm narthynx approve <approval-id>
+pnpm narthynx resume <mission-id>
+```
+
+Inspect the durable outputs:
 
 ```bash
 pnpm narthynx report <mission-id>
 pnpm narthynx replay <mission-id>
+pnpm narthynx timeline <mission-id>
 pnpm narthynx cost <mission-id>
 ```
 
-Approval-gated writes are available through typed tools and must be explicitly approved before execution.
+## Interactive Mode
 
-Inside interactive mode, use slash commands for the same durable runtime:
+Running `pnpm narthynx` with no arguments opens the mission-first shell:
+
+```txt
+Narthynx interactive
+Local-first Mission Agent OS. Persistent missions. Approval-gated actions. Replayable execution.
+Type /help for commands or /exit to leave.
+Narthynx  mode: Ask  mission: none  state: none  risk: none  model: stub
+nx>
+```
+
+The same flow works with slash commands:
 
 ```txt
 /mission "Prepare my launch checklist from this repo"
 /plan
 /run
-/tool filesystem.list --input '{"path":"."}'
-/timeline
 /approve
 /resume
 /report
@@ -160,14 +159,64 @@ Inside interactive mode, use slash commands for the same durable runtime:
 /help
 ```
 
-The `! <command>` shortcut requests approval for `shell.run`; it does not execute commands silently. Context attachment and mission memory shortcuts remain future-facing and print honest messages.
+The `! <command>` shortcut creates an approval for typed `shell.run`; it does not execute shell commands silently. `@ <path>` and `# <note>` remain future context/memory shortcuts and print honest messages.
 
-Read-only Git connectors are available through typed tools:
+## Command Reference
 
-```bash
-pnpm narthynx tool <mission-id> git.diff --input "{}"
-pnpm narthynx tool <mission-id> git.log --input "{\"maxCount\":5}"
+```txt
+narthynx                         open interactive mode
+narthynx init                    create .narthynx workspace files
+narthynx doctor                  check workspace health
+narthynx mission <goal>          create a durable mission
+narthynx missions                list missions
+narthynx open <mission-id>       show mission details
+narthynx plan <mission-id>       show or regenerate the plan
+narthynx plan <mission-id> --model
+narthynx run <mission-id>        start or continue the bounded executor
+narthynx pause <mission-id>      pause a running or waiting mission
+narthynx resume <mission-id>     continue a paused or waiting mission
+narthynx approve <approval-id>   approve a pending action
+narthynx approve <approval-id> --deny
+narthynx timeline <mission-id>   show raw ledger events
+narthynx replay <mission-id>     show the narrative mission story
+narthynx report <mission-id>     generate or print the Markdown report
+narthynx cost <mission-id>       summarize model and cost events
+narthynx tools                   list typed tools
+narthynx tool <mission-id> <tool-name> --input <json>
+narthynx rewind <mission-id> <checkpoint-id>
 ```
+
+## Architecture
+
+```txt
+src/
+  agent/     model providers, routing, model planning, cost summaries, executor
+  cli/       CLI entrypoint, interactive shell, slash commands, rendering
+  config/    workspace defaults, YAML loading, init, doctor
+  missions/  schema, store, ledger, graph, approvals, checkpoints, reports, replay
+  tools/     typed tool definitions, registry, policy classification, runner
+tests/       Vitest coverage for implemented phases
+```
+
+The ledger is the source of truth for timeline, replay, reports, approvals, tool outcomes, model calls, and cost summaries. Runtime behavior should go through typed services rather than writing hidden state directly.
+
+## Safety Model
+
+Narthynx is designed around these defaults:
+
+- no irreversible action without explicit approval
+- no credential access by default
+- no raw shell execution
+- no network by default
+- no external communication without approval
+- every tool call is logged
+- approval outcomes are recorded
+- high-risk writes are checkpointed where supported
+- secrets are not sent to cloud models without explicit policy permission
+
+Phase 13 executes only the deterministic MVP graph slice: local read-only inspection, approval-gated report artifact write, deterministic final report generation, and replayable completion. It does not perform autonomous shell execution, model-selected tools, external communication, or arbitrary writes.
+
+## Model Providers
 
 Model planning is explicit and local-first by default:
 
@@ -175,7 +224,9 @@ Model planning is explicit and local-first by default:
 pnpm narthynx plan <mission-id> --model
 ```
 
-Without provider environment variables, `--model` uses the deterministic `stub` provider and records zero-cost `model.called` and `cost.recorded` ledger events. To opt into an OpenAI-compatible provider, set:
+Without provider environment variables, `--model` uses the deterministic `stub` provider and records zero-cost `model.called` and `cost.recorded` ledger events.
+
+To opt into an OpenAI-compatible provider, set:
 
 ```bash
 NARTHYNX_MODEL_PROVIDER=openai-compatible
@@ -186,60 +237,25 @@ NARTHYNX_OPENAI_MODEL=...
 
 Cloud model calls require `allow_network: true` in `policy.yaml`. Sensitive context is blocked or refused unless policy explicitly allows it, and secrets are not persisted to mission files.
 
-## Workspace Files
+## Visual Assets
 
-`config.yaml` stores simple local workspace metadata:
+Phase 14 reserves space for public launch visuals without faking them:
 
-```yaml
-workspace_version: 1
-created_by: narthynx
-default_policy: policy.yaml
-missions_dir: missions
-```
+- `docs/assets/demo-flow-placeholder.md` describes the intended terminal GIF.
+- `docs/assets/report-placeholder.md` describes the intended report screenshot.
+- `docs/assets/replay-placeholder.md` describes the intended replay screenshot.
 
-`policy.yaml` starts with safe local-first defaults:
+Replace these placeholders only with real captures from the documented quickstart flow.
 
-```yaml
-mode: ask
-allow_network: false
-shell: ask
-filesystem:
-  read:
-    - .
-  write:
-    - .
-  deny:
-    - .env
-    - .env.*
-    - "**/*secret*"
-    - ~/.ssh/**
-external_communication: block
-credentials: block
-cloud_model_sensitive_context: ask
-```
+## Examples
 
-Existing config and policy files are preserved by `narthynx init`.
+See:
 
-## Safety Model
+- `examples/launch-checklist/`
+- `examples/bug-investigation/`
+- `examples/replay-and-report/`
 
-Narthynx is designed around these defaults:
-
-- no irreversible action without explicit approval
-- no credential access by default
-- no shell execution without policy control
-- no network by default in the MVP
-- no external communication without approval
-- every future tool call logged
-- every future high-risk action checkpointed
-- no secrets sent to cloud models without explicit policy permission
-
-Current MVP phases do not read credentials, send external communications, or execute arbitrary shell commands. Local writes are routed through typed tools, approval gates, ledger events, and checkpoints.
-
-Phase 11 includes local command execution only through approval-gated `shell.run` with `shell: false`, blocked metacharacters, blocked destructive patterns, workspace-bounded `cwd`, ledger events, and output artifacts.
-
-Phase 12 keeps `stub` as the default model provider. Optional cloud model calls are disabled unless explicitly configured and allowed by policy.
-
-Phase 13 executes only the deterministic MVP graph slice: local read-only inspection, approval-gated report artifact write, deterministic final report generation, and replayable completion. It does not perform autonomous shell execution, model-selected tools, external communication, or arbitrary writes.
+Each example is local-first, copyable, and avoids secrets, network calls, destructive shell commands, and unsupported autonomy claims.
 
 ## Development
 
@@ -248,49 +264,29 @@ pnpm install
 pnpm build
 pnpm test
 pnpm lint
+pnpm pack --dry-run
 ```
 
-Run the CLI from source:
-
-```bash
-pnpm narthynx --help
-pnpm narthynx init
-pnpm narthynx doctor
-```
+Before opening a PR, run the relevant tests and update docs when behavior changes.
 
 ## Roadmap
 
-The build follows the phased plan in `Narthynx_Codex_AGENTS.md`.
+The MVP track through Phase 14 is complete. Phase 15 and beyond remain post-MVP exploration:
 
-1. Phase 0: TypeScript CLI bootstrap.
-2. Phase 1: Local `.narthynx/` workspace initialization.
-3. Phase 2: Durable mission schema and store.
-4. Phase 3: Append-only ledger.
-5. Phase 4: Plan graph.
-6. Phase 5: Typed tool foundation.
-7. Phase 6: Policy, risk, and approval gate.
-8. Phase 7: Safe filesystem writes and checkpoints.
-9. Phase 8: Report generation.
-10. Phase 9: Replay.
-11. Phase 10: Interactive CLI/TUI.
-12. Phase 11: Shell and Git connectors.
-13. Phase 12: Model provider abstraction.
-14. Phase 13: Mission executor vertical slice.
-15. Phase 14: Open-source polish.
+- local web cockpit
+- visual mission graph
+- event-to-mission triggers
+- browser connector
+- MCP connector
+- GitHub connector
+- mission templates
+- proof cards
+- context diet engine
+- cloud/local hybrid execution
+- safe team collaboration
+- encrypted mission vault
 
-The first public demo is successful when a user can create a mission, inspect its plan, execute safe local actions, pause for risky approval, approve or deny, generate a report, and replay the mission timeline.
-
-## Project Structure
-
-```txt
-src/
-  agent/     model provider abstraction, router, model planning, cost summaries, executor
-  cli/       CLI entrypoint, interactive shell, slash commands, terminal rendering
-  config/    workspace defaults, YAML loading, init, doctor
-  missions/  mission schema, store, ledger, graph, approvals, checkpoints, reports, replay
-  tools/     typed tool definitions, registry, policy classification, runner
-tests/       Vitest coverage for implemented phases
-```
+See `docs/roadmap.md` for the phase table.
 
 ## Contributing
 
@@ -309,7 +305,7 @@ Please keep contributions aligned with the mission-native product identity:
 
 See `SECURITY.md`.
 
-Do not include live credentials, private keys, tokens, or sensitive production data in issues, tests, logs, or examples.
+Do not include live credentials, private keys, tokens, or sensitive production data in issues, tests, logs, examples, ledgers, reports, or replay output.
 
 ## License
 

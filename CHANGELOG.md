@@ -3,8 +3,11 @@
 ## 0.1.0
 
 - Bootstrap Phase 0 TypeScript CLI foundation.
-- Add placeholder command surface for the planned mission runtime.
-- Add baseline tests and open-source project files.
-- Add durable missions, ledgers, plan graphs, typed tools, approvals, checkpoints, reports, and Phase 9 replay.
+- Add local workspace initialization, doctor checks, durable mission store, state transitions, and mission listing/opening.
+- Add append-only ledgers, deterministic plan graphs, typed tools, policy classification, approvals, checkpoints, and basic rewind.
+- Add report generation, replay rendering, and raw timeline views.
 - Add Phase 10 interactive shell with status lines, slash commands, current-mission context, and scripted tests.
-- Add Phase 11 approval-gated shell.run plus read-only git.diff and git.log connectors with output artifacts.
+- Add Phase 11 approval-gated `shell.run` plus read-only `git.diff` and `git.log` connectors with output artifacts.
+- Add Phase 12 model provider abstraction with deterministic stub provider, optional OpenAI-compatible routing, model ledger events, and cost summaries.
+- Add Phase 13 bounded mission executor with read-only steps, approval pause/resume, final reports, and replayable completion.
+- Add Phase 14 open-source polish: public docs, examples, GitHub templates, release checklist, and package metadata.

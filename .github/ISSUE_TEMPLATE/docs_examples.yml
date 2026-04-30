@@ -1,0 +1,31 @@
+name: Docs or examples
+description: Report stale docs, unclear examples, or contributor experience gaps
+title: "[Docs]: "
+labels:
+  - documentation
+body:
+  - type: textarea
+    id: location
+    attributes:
+      label: Location
+      description: Link or name the README, docs page, example, template, or command output.
+    validations:
+      required: true
+  - type: textarea
+    id: issue
+    attributes:
+      label: What is unclear or stale?
+    validations:
+      required: true
+  - type: textarea
+    id: suggested
+    attributes:
+      label: Suggested improvement
+      description: If possible, include replacement wording or a safer example command.
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety check
+      options:
+        - label: This report does not include secrets, credentials, private keys, or sensitive production data.
+          required: true

@@ -50,3 +50,18 @@ Model providers are not typed tools; they are routed through `src/agent/model-ro
 - Cloud calls require `allow_network: true`.
 - `/cost` and `narthynx cost <mission-id>` summarize model calls, tokens, estimated cost, and sensitive-context usage.
 - Phase 12 only wires model routing into explicit plan generation through `plan --model`; it does not execute missions autonomously.
+
+## Phase 13 Executor Usage
+
+The Phase 13 executor uses connectors only through the typed runtime:
+
+- workspace inspection uses read-only local tools
+- Git context uses read-only status-style behavior
+- the approval pause uses the existing approval queue
+- final reporting uses the existing report artifact path
+
+The executor does not use `shell.run`, cloud model routing, external communication, browser automation, or arbitrary filesystem writes.
+
+## Phase 14 Documentation Rules
+
+Connector docs and examples must describe implemented behavior only. Post-MVP connector candidates such as browser automation, MCP, GitHub, email, calendar, and hosted sync remain out of scope until they are implemented as typed tools with schemas, policy classification, approval behavior, ledger records, artifacts where useful, and tests.
