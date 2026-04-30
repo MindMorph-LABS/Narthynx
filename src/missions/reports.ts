@@ -148,7 +148,7 @@ function renderReport(input: {
     "",
     "## Limitations",
     "- This Phase 8 report is deterministic and local-only; no model-generated analysis is included.",
-    "- Mission execution, model routing, shell execution, and network behavior are not implemented in this phase.",
+    "- Mission execution, model routing, raw shell mode, and network behavior are not implemented in this phase.",
     "",
     "## Next Recommended Actions",
     "- Review this report against the mission goal and success criteria.",

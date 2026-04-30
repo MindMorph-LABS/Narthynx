@@ -11,11 +11,12 @@ import type { Mission } from "./schema";
 import { missionDirectory, missionFilePath } from "./store";
 
 export const ARTIFACTS_DIR_NAME = "artifacts";
+export const OUTPUTS_DIR_NAME = "outputs";
 
 export const artifactSchema = z.object({
   id: z.string().regex(/^art_[a-z0-9_-]+$/),
   missionId: z.string().regex(/^m_[a-z0-9_-]+$/),
-  type: z.literal("report"),
+  type: z.enum(["report", "command_output", "git_diff", "git_log"]),
   path: z.string().min(1),
   title: z.string().min(1),
   createdAt: z.string().datetime(),
@@ -32,8 +33,17 @@ export interface RegisterReportArtifactInput {
   metadata?: Record<string, unknown>;
 }
 
+export interface RegisterArtifactInput {
+  missionId: string;
+  type: Artifact["type"];
+  title: string;
+  relativePath: string;
+  metadata?: Record<string, unknown>;
+}
+
 export interface ArtifactStore {
   registerReportArtifact(input: RegisterReportArtifactInput): Promise<{ artifact: Artifact; regenerated: boolean }>;
+  registerArtifact(input: RegisterArtifactInput): Promise<{ artifact: Artifact; regenerated: boolean }>;
   readMissionArtifacts(missionId: string): Promise<Artifact[]>;
 }
 
@@ -45,19 +55,33 @@ export function reportArtifactPath(missionDir: string): string {
   return path.join(artifactsDirPath(missionDir), "report.md");
 }
 
+export function outputsDirPath(missionDir: string): string {
+  return path.join(artifactsDirPath(missionDir), OUTPUTS_DIR_NAME);
+}
+
 export function createArtifactStore(cwd = process.cwd()): ArtifactStore {
   const paths = resolveWorkspacePaths(cwd);
 
   return {
     async registerReportArtifact(input) {
+      return this.registerArtifact({
+        missionId: input.missionId,
+        type: "report",
+        title: input.title,
+        relativePath: input.relativePath ?? "artifacts/report.md",
+        metadata: input.metadata
+      });
+    },
+
+    async registerArtifact(input) {
       const existing = await this.readMissionArtifacts(input.missionId);
-      const previous = existing.find((artifact) => artifact.type === "report" && artifact.path === (input.relativePath ?? "artifacts/report.md"));
+      const previous = existing.find((artifact) => artifact.type === input.type && artifact.path === input.relativePath);
       const now = new Date().toISOString();
       const artifact = artifactSchema.parse({
         id: previous?.id ?? createArtifactId(),
         missionId: input.missionId,
-        type: "report",
-        path: input.relativePath ?? "artifacts/report.md",
+        type: input.type,
+        path: input.relativePath,
         title: input.title,
         createdAt: previous?.createdAt ?? now,
         updatedAt: now,
@@ -71,9 +95,10 @@ export function createArtifactStore(cwd = process.cwd()): ArtifactStore {
       await appendLedgerEvent(ledgerFilePath(missionDirectory(paths.missionsDir, input.missionId)), {
         missionId: input.missionId,
         type: "artifact.created",
-        summary: previous ? `Report artifact regenerated: ${artifact.path}` : `Report artifact created: ${artifact.path}`,
+        summary: previous ? `${artifact.type} artifact regenerated: ${artifact.path}` : `${artifact.type} artifact created: ${artifact.path}`,
         details: {
           artifactId: artifact.id,
+          artifactType: artifact.type,
           path: artifact.path,
           regenerated: Boolean(previous)
         },
@@ -100,6 +125,19 @@ export async function writeReportArtifact(cwd: string, missionId: string, conten
   await mkdir(path.dirname(filePath), { recursive: true });
   await writeFile(filePath, content, "utf8");
   return filePath;
+}
+
+export async function writeOutputArtifact(cwd: string, missionId: string, fileName: string, content: string): Promise<{ absolutePath: string; relativePath: string }> {
+  const paths = resolveWorkspacePaths(cwd);
+  const safeName = fileName.replace(/[^a-zA-Z0-9_.-]/g, "_");
+  const relativePath = `${ARTIFACTS_DIR_NAME}/${OUTPUTS_DIR_NAME}/${safeName}`;
+  const absolutePath = path.join(outputsDirPath(missionDirectory(paths.missionsDir, missionId)), safeName);
+  await mkdir(path.dirname(absolutePath), { recursive: true });
+  await writeFile(absolutePath, content, "utf8");
+  return {
+    absolutePath,
+    relativePath
+  };
 }
 
 async function mirrorMissionArtifacts(missionsDir: string, missionId: string, artifacts: Artifact[]): Promise<void> {

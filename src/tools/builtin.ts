@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -7,8 +7,9 @@ import { z } from "zod";
 
 import { loadWorkspacePolicy } from "../config/load";
 import { resolveWorkspacePaths } from "../config/workspace";
-import { createArtifactStore, reportArtifactPath } from "../missions/artifacts";
+import { createArtifactStore, reportArtifactPath, writeOutputArtifact } from "../missions/artifacts";
 import { missionDirectory } from "../missions/store";
+import { classifyCommandSafety, resolveWorkspaceCommandCwd } from "./command-safety";
 import { resolveGuardedWorkspacePath } from "./path-guard";
 import type { ToolAction } from "./types";
 
@@ -49,6 +50,47 @@ const gitStatusOutputSchema = z.object({
   isRepository: z.boolean(),
   stdout: z.string(),
   stderr: z.string()
+});
+
+const commandOutputSchema = z.object({
+  command: z.string(),
+  args: z.array(z.string()),
+  cwd: z.string(),
+  exitCode: z.number().int().nullable(),
+  stdout: z.string(),
+  stderr: z.string(),
+  timedOut: z.boolean(),
+  durationMs: z.number().int().nonnegative(),
+  artifactPath: z.string().optional(),
+  truncated: z.boolean()
+});
+
+const shellRunInputSchema = z.object({
+  command: z.string().min(1),
+  args: z.array(z.string()).default([]),
+  cwd: z.string().min(1).default("."),
+  timeoutMs: z.number().int().min(1_000).max(30_000).default(5_000)
+});
+
+const gitDiffInputSchema = z.object({
+  pathspecs: z.array(z.string()).default([]),
+  stat: z.boolean().default(false),
+  maxBytes: z.number().int().min(1_000).max(100_000).default(12_000)
+});
+
+const gitLogInputSchema = z.object({
+  maxCount: z.number().int().min(1).max(100).default(20),
+  oneline: z.boolean().default(true),
+  maxBytes: z.number().int().min(1_000).max(100_000).default(12_000)
+});
+
+const gitCommandOutputSchema = z.object({
+  isRepository: z.boolean(),
+  exitCode: z.number().int().nullable(),
+  stdout: z.string(),
+  stderr: z.string(),
+  artifactPath: z.string().optional(),
+  truncated: z.boolean()
 });
 
 const reportWriteInputSchema = z.object({
@@ -176,6 +218,114 @@ export const builtinTools: ToolAction<unknown, unknown>[] = [
     }
   },
   {
+    name: "git.diff",
+    description: "Read local git diff without running a shell.",
+    inputSchema: gitDiffInputSchema,
+    outputSchema: gitCommandOutputSchema,
+    riskLevel: "low",
+    sideEffect: "local_read",
+    requiresApproval: false,
+    reversible: true,
+    async run(input, context) {
+      const parsed = gitDiffInputSchema.parse(input);
+      const args = ["diff", parsed.stat ? "--stat" : undefined, "--", ...parsed.pathspecs].filter((arg): arg is string => Boolean(arg));
+      const result = await runGitReadCommand({
+        cwd: context.cwd,
+        missionId: context.missionId,
+        args,
+        artifactType: "git_diff",
+        artifactPrefix: "git-diff",
+        maxBytes: parsed.maxBytes
+      });
+
+      return result;
+    }
+  },
+  {
+    name: "git.log",
+    description: "Read local git log without running a shell.",
+    inputSchema: gitLogInputSchema,
+    outputSchema: gitCommandOutputSchema,
+    riskLevel: "low",
+    sideEffect: "local_read",
+    requiresApproval: false,
+    reversible: true,
+    async run(input, context) {
+      const parsed = gitLogInputSchema.parse(input);
+      const args = ["log", `--max-count=${parsed.maxCount}`, parsed.oneline ? "--oneline" : undefined].filter((arg): arg is string =>
+        Boolean(arg)
+      );
+      const result = await runGitReadCommand({
+        cwd: context.cwd,
+        missionId: context.missionId,
+        args,
+        artifactType: "git_log",
+        artifactPrefix: "git-log",
+        maxBytes: parsed.maxBytes
+      });
+
+      return result;
+    }
+  },
+  {
+    name: "shell.run",
+    description: "Run a local command through the approval-gated shell connector.",
+    inputSchema: shellRunInputSchema,
+    outputSchema: commandOutputSchema,
+    riskLevel: "high",
+    sideEffect: "shell",
+    requiresApproval: true,
+    reversible: false,
+    async run(input, context) {
+      const parsed = shellRunInputSchema.parse(input);
+      const safety = classifyCommandSafety({
+        command: parsed.command,
+        args: parsed.args
+      });
+      if (!safety.ok) {
+        throw new Error(safety.reason ?? "shell.run input is blocked by safety policy.");
+      }
+
+      const commandCwd = resolveWorkspaceCommandCwd(context.cwd, parsed.cwd);
+      const startedAt = Date.now();
+      const result = await runProcess(parsed.command, parsed.args, {
+        cwd: commandCwd.absolutePath,
+        timeoutMs: parsed.timeoutMs
+      });
+      const durationMs = Date.now() - startedAt;
+      const artifact = await writeCommandOutput({
+        cwd: context.cwd,
+        missionId: context.missionId,
+        type: "command_output",
+        filePrefix: "shell-run",
+        title: `shell.run ${parsed.command}`,
+        command: parsed.command,
+        args: parsed.args,
+        commandCwd: commandCwd.relativePath,
+        exitCode: result.exitCode,
+        stdout: result.stdout,
+        stderr: result.stderr,
+        timedOut: result.timedOut,
+        durationMs
+      });
+      const stdout = truncate(result.stdout, 12_000);
+      const stderr = truncate(result.stderr, 12_000);
+
+      return {
+        command: parsed.command,
+        args: parsed.args,
+        cwd: commandCwd.relativePath,
+        exitCode: result.exitCode,
+        stdout: stdout.value,
+        stderr: stderr.value,
+        timedOut: result.timedOut,
+        durationMs,
+        artifactPath: artifact.path,
+        truncated: stdout.truncated || stderr.truncated
+      };
+    }
+  },
+  {
     name: "report.write",
     description: "Write a local mission report after report generation exists.",
     inputSchema: reportWriteInputSchema,
@@ -221,4 +371,166 @@ async function loadPolicyOrThrow(cwd: string) {
   }
 
   return policy.value;
+}
+
+async function runGitReadCommand(input: {
+  cwd: string;
+  missionId: string;
+  args: string[];
+  artifactType: "git_diff" | "git_log";
+  artifactPrefix: string;
+  maxBytes: number;
+}) {
+  const result = await runProcess("git", input.args, {
+    cwd: input.cwd,
+    timeoutMs: 5_000
+  });
+  const isRepository = !(result.exitCode !== 0 && /not a git repository/i.test(result.stderr));
+
+  if (!isRepository) {
+    return {
+      isRepository: false,
+      exitCode: result.exitCode,
+      stdout: "",
+      stderr: result.stderr,
+      truncated: false
+    };
+  }
+
+  const artifact = await writeCommandOutput({
+    cwd: input.cwd,
+    missionId: input.missionId,
+    type: input.artifactType,
+    filePrefix: input.artifactPrefix,
+    title: input.artifactType === "git_diff" ? "Git diff output" : "Git log output",
+    command: "git",
+    args: input.args,
+    commandCwd: ".",
+    exitCode: result.exitCode,
+    stdout: result.stdout,
+    stderr: result.stderr,
+    timedOut: result.timedOut,
+    durationMs: 0
+  });
+  const stdout = truncate(result.stdout, input.maxBytes);
+  const stderr = truncate(result.stderr, input.maxBytes);
+
+  return {
+    isRepository: true,
+    exitCode: result.exitCode,
+    stdout: stdout.value,
+    stderr: stderr.value,
+    artifactPath: artifact.path,
+    truncated: stdout.truncated || stderr.truncated
+  };
+}
+
+function runProcess(
+  command: string,
+  args: string[],
+  options: { cwd: string; timeoutMs: number }
+): Promise<{ exitCode: number | null; stdout: string; stderr: string; timedOut: boolean }> {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, {
+      cwd: options.cwd,
+      shell: false,
+      windowsHide: true
+    });
+    const stdout: Buffer[] = [];
+    const stderr: Buffer[] = [];
+    let timedOut = false;
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      child.kill();
+    }, options.timeoutMs);
+
+    child.stdout?.on("data", (chunk: Buffer) => stdout.push(chunk));
+    child.stderr?.on("data", (chunk: Buffer) => stderr.push(chunk));
+    child.on("error", (error) => {
+      clearTimeout(timeout);
+      resolve({
+        exitCode: null,
+        stdout: Buffer.concat(stdout).toString("utf8"),
+        stderr: error.message,
+        timedOut
+      });
+    });
+    child.on("close", (code) => {
+      clearTimeout(timeout);
+      resolve({
+        exitCode: code,
+        stdout: Buffer.concat(stdout).toString("utf8"),
+        stderr: Buffer.concat(stderr).toString("utf8"),
+        timedOut
+      });
+    });
+  });
+}
+
+async function writeCommandOutput(input: {
+  cwd: string;
+  missionId: string;
+  type: "command_output" | "git_diff" | "git_log";
+  filePrefix: string;
+  title: string;
+  command: string;
+  args: string[];
+  commandCwd: string;
+  exitCode: number | null;
+  stdout: string;
+  stderr: string;
+  timedOut: boolean;
+  durationMs: number;
+}): Promise<{ path: string }> {
+  const now = new Date().toISOString().replace(/[:.]/g, "-");
+  const fileName = `${input.filePrefix}-${now}.txt`;
+  const content = [
+    `command: ${input.command}`,
+    `args: ${JSON.stringify(input.args)}`,
+    `cwd: ${input.commandCwd}`,
+    `exitCode: ${input.exitCode}`,
+    `timedOut: ${input.timedOut}`,
+    `durationMs: ${input.durationMs}`,
+    "",
+    "stdout:",
+    input.stdout,
+    "",
+    "stderr:",
+    input.stderr
+  ].join("\n");
+  const written = await writeOutputArtifact(input.cwd, input.missionId, fileName, content);
+  const { artifact } = await createArtifactStore(input.cwd).registerArtifact({
+    missionId: input.missionId,
+    type: input.type,
+    title: input.title,
+    relativePath: written.relativePath,
+    metadata: {
+      command: input.command,
+      args: input.args,
+      cwd: input.commandCwd,
+      exitCode: input.exitCode,
+      timedOut: input.timedOut,
+      durationMs: input.durationMs,
+      bytes: Buffer.byteLength(content, "utf8")
+    }
+  });
+
+  return {
+    path: artifact.path
+  };
+}
+
+function truncate(value: string, maxBytes: number): { value: string; truncated: boolean } {
+  const buffer = Buffer.from(value, "utf8");
+  if (buffer.byteLength <= maxBytes) {
+    return {
+      value,
+      truncated: false
+    };
+  }
+
+  return {
+    value: `${buffer.subarray(0, maxBytes).toString("utf8")}\n[truncated to ${maxBytes} bytes]`,
+    truncated: true
+  };
 }

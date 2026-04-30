@@ -2,7 +2,7 @@
 
 Narthynx is a local-first Mission Agent OS. The CLI should feel fast, readable, and mission-native: users operate durable missions, not a hidden chat loop.
 
-## Phase 10 Interactive Mode
+## Interactive Mode
 
 Running `narthynx` with no arguments opens interactive mode.
 
@@ -25,7 +25,7 @@ The current mission is session-local. It is not persisted as hidden state.
 
 ## Slash Commands
 
-Phase 10 supports:
+Interactive mode supports:
 
 ```txt
 /mission <goal|mission-id>
@@ -50,17 +50,19 @@ Commands that accept `[mission-id]` use the current mission when the argument is
 
 ## Safety Boundaries
 
-Interactive mode is a wrapper over existing typed runtime services. It does not introduce raw shell execution, network calls, model providers, external communication, or hidden state mutations.
+Interactive mode is a wrapper over existing typed runtime services. It does not introduce raw shell strings, network calls, model providers, external communication, or hidden state mutations.
 
-The future shortcuts are intentionally honest:
+Shortcuts:
 
 ```txt
-! <command>  reserved for Phase 11 shell.run and not executed
+! <command>  requests approval for shell.run
 @ <path>     reserved for a future context workflow
 # <note>     reserved for a future memory workflow
 ```
 
-`/policy` is read-only in Phase 10. Policy edits need a future typed update workflow so safety defaults are not weakened casually.
+`! <command>` creates a typed `shell.run` approval for the current mission. The command does not execute until the user approves it through `/approve <approval-id>` or `narthynx approve <approval-id>`.
+
+`/policy` is read-only. Policy edits need a future typed update workflow so safety defaults are not weakened casually.
 
 ## Error Handling
 

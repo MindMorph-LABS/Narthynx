@@ -6,7 +6,7 @@ import { loadWorkspacePolicy } from "../config/load";
 import { resolveWorkspacePaths } from "../config/workspace";
 import { createMissionStore } from "../missions/store";
 import type { Mission } from "../missions/schema";
-import { dispatchSlashCommand, parseSlashCommand } from "./slash-commands";
+import { dispatchSlashCommand, parseShellShortcut, parseSlashCommand } from "./slash-commands";
 import { renderInteractiveWelcome, renderPrompt, renderStatusLine } from "./renderer";
 
 export const INTERACTIVE_INTERRUPT = "\u0003";
@@ -156,8 +156,23 @@ async function handleInteractiveLine(line: string, session: InteractiveRuntime, 
   }
 
   if (trimmed.startsWith("!")) {
-    io.writeOut("Shell execution is reserved for Phase 11 and was not run.\n");
-    return false;
+    try {
+      const shellInput = parseShellShortcut(trimmed);
+      return await dispatchInteractiveCommand(
+        {
+          raw: trimmed,
+          name: "tool",
+          args: ["shell.run", "--input", JSON.stringify(shellInput)]
+        },
+        session,
+        io
+      );
+    } catch (error) {
+      session.exitCode = 1;
+      const message = error instanceof Error ? error.message : "Unknown shell shortcut failure";
+      io.writeErr(`${message}\n`);
+      return false;
+    }
   }
 
   if (trimmed.startsWith("@")) {
@@ -177,19 +192,27 @@ async function handleInteractiveLine(line: string, session: InteractiveRuntime, 
   }
 
   try {
-    const result = await dispatchSlashCommand(parseSlashCommand(trimmed), {
-      cwd: session.cwd,
-      currentMissionId: session.currentMissionId
-    });
-    session.currentMissionId = result.currentMissionId;
-    io.writeOut(`${ensureTrailingNewline(result.output)}`);
-    return result.exit;
+    return await dispatchInteractiveCommand(parseSlashCommand(trimmed), session, io);
   } catch (error) {
     session.exitCode = 1;
     const message = error instanceof Error ? error.message : "Unknown interactive failure";
     io.writeErr(`${message}\n`);
     return false;
   }
+}
+
+async function dispatchInteractiveCommand(
+  command: ReturnType<typeof parseSlashCommand>,
+  session: InteractiveRuntime,
+  io: InteractiveIo
+): Promise<boolean> {
+  const result = await dispatchSlashCommand(command, {
+    cwd: session.cwd,
+    currentMissionId: session.currentMissionId
+  });
+  session.currentMissionId = result.currentMissionId;
+  io.writeOut(`${ensureTrailingNewline(result.output)}`);
+  return result.exit;
 }
 
 async function writeStatus(session: InteractiveRuntime, io: InteractiveIo): Promise<void> {

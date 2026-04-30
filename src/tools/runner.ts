@@ -6,6 +6,7 @@ import { createApprovalStore } from "../missions/approvals";
 import { createCheckpointStore } from "../missions/checkpoints";
 import { appendLedgerEvent, ledgerFilePath } from "../missions/ledger";
 import { createMissionStore, missionDirectory } from "../missions/store";
+import { classifyShellRunInputSafety, shellRunApprovalTarget } from "./command-safety";
 import { classifyToolPolicy } from "./policy";
 import { createToolRegistry, type ToolRegistry } from "./registry";
 import type { ToolRunRequest, ToolRunResult } from "./types";
@@ -60,6 +61,13 @@ export function createToolRunner(options: ToolRunnerOptions = {}) {
         return { ok: false, toolName: tool.name, message, blocked: false };
       }
 
+      const inputSafety = classifyToolInputSafety(tool.name, input.data, paths.rootDir);
+      if (!inputSafety.ok) {
+        const message = inputSafety.reason ?? `${tool.name} input is blocked by safety policy.`;
+        await appendDenied(ledgerPath, request, message, "blocked");
+        return { ok: false, toolName: tool.name, message, blocked: true };
+      }
+
       const decision = classifyToolPolicy(tool, policy.value);
       if (decision.action === "block") {
         await appendDenied(ledgerPath, request, decision.reason, "blocked");
@@ -73,7 +81,8 @@ export function createToolRunner(options: ToolRunnerOptions = {}) {
           toolInput: input.data,
           riskLevel: decision.riskLevel,
           sideEffect: tool.sideEffect,
-          reason: decision.reason
+          reason: decision.reason,
+          target: approvalTargetForTool(tool.name, input.data)
         });
         const message = `${tool.name} requires approval. Run: narthynx approve ${approval.id}`;
         await appendDenied(ledgerPath, request, message, "pending_approval", approval.id);
@@ -114,11 +123,11 @@ export function createToolRunner(options: ToolRunnerOptions = {}) {
         };
       }
 
-      if (approval.toolName !== "filesystem.write" && approval.toolName !== "report.write") {
+      if (approval.toolName !== "filesystem.write" && approval.toolName !== "report.write" && approval.toolName !== "shell.run") {
         return {
           ok: false,
           toolName: approval.toolName,
-          message: `${approval.toolName} continuation is not implemented in Phase 10.`,
+          message: `${approval.toolName} continuation is not implemented in Phase 11.`,
           blocked: true,
           approvalId
         };
@@ -130,6 +139,13 @@ export function createToolRunner(options: ToolRunnerOptions = {}) {
         const message = `Invalid approved input for ${tool.name}: ${formatZodError(input.error)}`;
         await appendFailed(ledgerPath, { missionId: approval.missionId, toolName: tool.name, input: approval.toolInput }, message);
         return { ok: false, toolName: tool.name, message, blocked: false, approvalId };
+      }
+
+      const inputSafety = classifyToolInputSafety(tool.name, input.data, paths.rootDir);
+      if (!inputSafety.ok) {
+        const message = inputSafety.reason ?? `${tool.name} input is blocked by safety policy.`;
+        await appendFailed(ledgerPath, { missionId: approval.missionId, toolName: tool.name, input: approval.toolInput }, message, true);
+        return { ok: false, toolName: tool.name, message, blocked: true, approvalId };
       }
 
       let checkpointId: string | undefined;
@@ -264,4 +280,25 @@ async function appendDenied(
 
 function formatZodError(error: z.ZodError): string {
   return error.issues.map((issue) => `${issue.path.join(".") || "input"}: ${issue.message}`).join("; ");
+}
+
+function classifyToolInputSafety(toolName: string, input: unknown, rootDir: string): { ok: boolean; reason?: string } {
+  if (toolName === "shell.run") {
+    return classifyShellRunInputSafety(input, rootDir);
+  }
+
+  return { ok: true };
+}
+
+function approvalTargetForTool(toolName: string, input: unknown): string | undefined {
+  if (toolName === "shell.run") {
+    return shellRunApprovalTarget(input);
+  }
+
+  if (typeof input === "object" && input !== null && "path" in input) {
+    const value = (input as { path?: unknown }).path;
+    return typeof value === "string" ? value : undefined;
+  }
+
+  return undefined;
 }

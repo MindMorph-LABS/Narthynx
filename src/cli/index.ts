@@ -85,15 +85,15 @@ const intro = [
   "Narthynx is a local-first Mission Agent OS.",
   "An AI agent that runs missions, not chats.",
   "",
-  "`narthynx init`, `doctor`, `mission`, `missions`, `open`, `plan`, `timeline`, `tools`, `tool`, `approve`, `rewind`, `report`, and `replay` are available in Phase 9.",
-  "Run `narthynx` in a terminal to open Phase 10 interactive mode.",
+  "`narthynx init`, `doctor`, `mission`, `missions`, `open`, `plan`, `timeline`, `tools`, `tool`, `approve`, `rewind`, `report`, and `replay` are available in Phase 11.",
+  "Run `narthynx` in a terminal to open interactive mode.",
   "Mission execution is not implemented yet."
 ].join("\n");
 
 function notImplementedMessage(commandName: string): string {
   return [
-    `Command "narthynx ${commandName}" is not implemented in Phase 10.`,
-    "Phase 10 provides interactive slash commands over the persisted mission runtime."
+    `Command "narthynx ${commandName}" is not implemented in Phase 11.`,
+    "Phase 11 provides approval-gated shell.run plus read-only git.diff and git.log connectors."
   ].join("\n");
 }
 
@@ -122,8 +122,8 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
     "after",
     [
       "",
-      "Phase 10 status:",
-      "  Workspace init, missions, ledgers, plan graphs, typed tools, approval gates, filesystem writes, checkpoints, reports, replay, and interactive slash commands are implemented.",
+      "Phase 11 status:",
+      "  Workspace init, missions, ledgers, plan graphs, typed tools, approval gates, filesystem writes, checkpoints, reports, replay, interactive slash commands, shell.run, git.diff, and git.log are implemented.",
       "  Mission execution still fails honestly until its build phase lands."
     ].join("\n")
   );
