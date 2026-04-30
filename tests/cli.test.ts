@@ -518,7 +518,9 @@ describe("Narthynx CLI", () => {
   });
 
   it("fails clearly when pausing a missing mission", async () => {
-    const result = await runCli(["pause", "m_missing"]);
+    const cwd = await tempWorkspaceRoot();
+    await runCli(["init"], { cwd });
+    const result = await runCli(["pause", "m_missing"], { cwd });
 
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain("Failed to read mission at");
