@@ -36,13 +36,13 @@
     "agent-runtime",
     "replay"
   ],
-  "homepage": "https://github.com/MindMorph-LABS/Narthyx#readme",
+  "homepage": "https://github.com/MindMorph-LABS/Narthynx#readme",
   "bugs": {
-    "url": "https://github.com/MindMorph-LABS/Narthyx/issues"
+    "url": "https://github.com/MindMorph-LABS/Narthynx/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/MindMorph-LABS/Narthyx.git"
+    "url": "git+https://github.com/MindMorph-LABS/Narthynx.git"
   },
   "license": "Apache-2.0",
   "engines": {

@@ -91,6 +91,7 @@ function renderReport(input: {
   const nodes = graphNodes(input.graph);
   const actionEvents = input.ledger.filter((event) => event.type.startsWith("tool.") || event.type.startsWith("checkpoint."));
   const failures = input.ledger.filter((event) => event.type.includes("failed") || event.type === "error");
+  const proofCard = input.artifacts.find((artifact) => artifact.type === "proof_card");
   const reportLines = [
     `# ${input.mission.title}`,
     "",
@@ -135,6 +136,11 @@ function renderReport(input: {
       ],
       "No artifacts or checkpoints are registered yet."
     ),
+    "",
+    "## Proof Card",
+    proofCard
+      ? `Proof card artifact: ${proofCard.path}`
+      : "No proof card artifact is registered yet. Run `narthynx proof <mission-id>` to generate one.",
     "",
     "## Risks Encountered",
     `Risk profile: ${input.mission.riskProfile.level}`,

@@ -6,3 +6,6 @@ coverage/
 .env
 .env.*
 *.log
+
+# Local phase docs (not tracked)
+narthynx_phase_16_30_docs/

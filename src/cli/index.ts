@@ -13,6 +13,9 @@ import { createCheckpointStore } from "../missions/checkpoints";
 import { createReplayService } from "../missions/replay";
 import { createReportService } from "../missions/reports";
 import { createMissionStore, missionFilePath } from "../missions/store";
+import { createMissionContextService } from "../missions/context";
+import { createProofCardService } from "../missions/proof-card";
+import { createMissionInputFromTemplate, listMissionTemplates } from "../missions/templates";
 import { createToolRegistry } from "../tools/registry";
 import { createToolRunner } from "../tools/runner";
 
@@ -22,15 +25,18 @@ export const CLI_COMMANDS = [
   "init",
   "mission",
   "missions",
+  "templates",
   "open",
   "plan",
   "run",
+  "context",
   "timeline",
   "tools",
   "tool",
   "approve",
   "rewind",
   "report",
+  "proof",
   "cost",
   "pause",
   "resume",
@@ -44,15 +50,18 @@ export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
     | "init"
     | "mission"
     | "missions"
+    | "templates"
     | "open"
     | "plan"
     | "run"
+    | "context"
     | "timeline"
     | "tools"
     | "tool"
     | "approve"
     | "rewind"
     | "report"
+    | "proof"
     | "cost"
     | "pause"
     | "resume"
@@ -62,15 +71,18 @@ export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
     name !== "init" &&
     name !== "mission" &&
     name !== "missions" &&
+    name !== "templates" &&
     name !== "open" &&
     name !== "plan" &&
     name !== "run" &&
+    name !== "context" &&
     name !== "timeline" &&
     name !== "tools" &&
     name !== "tool" &&
     name !== "approve" &&
     name !== "rewind" &&
     name !== "report" &&
+    name !== "proof" &&
     name !== "cost" &&
     name !== "pause" &&
     name !== "resume" &&
@@ -94,19 +106,10 @@ interface CliIo {
   writeErr: (message: string) => void;
 }
 
-const intro = [
-  "Narthynx is a local-first Mission Agent OS.",
-  "An AI agent that runs missions, not chats.",
-  "",
-  "`narthynx init`, `doctor`, `mission`, `missions`, `open`, `plan`, `run`, `timeline`, `tools`, `tool`, `approve`, `pause`, `resume`, `rewind`, `report`, `replay`, and `cost` are available in Phase 13.",
-  "Run `narthynx` in a terminal to open interactive mode.",
-  "Mission execution is implemented as a bounded Phase 13 vertical slice."
-].join("\n");
-
 function notImplementedMessage(commandName: string): string {
   return [
-    `Command "narthynx ${commandName}" is not implemented in Phase 13.`,
-    "Phase 13 provides the first approval-gated mission executor vertical slice."
+    `Command "narthynx ${commandName}" is not implemented in Phase 15.`,
+    "Phase 15 provides Mission Kit primitives: templates, context diet basics, and proof cards."
   ].join("\n");
 }
 
@@ -117,6 +120,8 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
   const checkpointStore = createCheckpointStore(cwd);
   const reportService = createReportService(cwd);
   const replayService = createReplayService(cwd);
+  const contextService = createMissionContextService(cwd);
+  const proofCardService = createProofCardService(cwd);
   const costService = createCostService(cwd);
   const modelPlanner = createModelPlanner(cwd);
   const executor = createMissionExecutor(cwd);
@@ -139,7 +144,9 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
     [
       "",
       "Phase 13 status:",
-      "  Workspace init, missions, ledgers, plan graphs, typed tools, approval gates, filesystem writes, checkpoints, reports, replay, interactive slash commands, shell.run, git.diff, git.log, model provider routing, cost summaries, and the first mission executor vertical slice are implemented."
+      "  Workspace init, missions, ledgers, plan graphs, typed tools, approval gates, filesystem writes, checkpoints, reports, replay, interactive slash commands, shell.run, git.diff, git.log, model provider routing, cost summaries, and the first mission executor vertical slice are implemented.",
+      "Phase 15 status:",
+      "  Mission templates, context diet basics, and proof cards are implemented."
     ].join("\n")
   );
 
@@ -154,7 +161,9 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
       return;
     }
 
-    io.writeOut(`${intro}\n`);
+    io.writeOut(
+      "Run `narthynx` with no arguments in a terminal for the interactive mission shell. Use `narthynx --help` for one-shot subcommands.\n"
+    );
   });
 
   program
@@ -201,26 +210,42 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
     .command("mission")
     .description("Create a mission from a natural-language goal. (Phase 2)")
     .argument("[goal...]", "Mission goal")
-    .action(async (goalParts: string[]) => {
+    .option("--template <name>", "Create the mission from a built-in Phase 15 template")
+    .action(async (goalParts: string[], commandOptions: { template?: string }) => {
       const goal = goalParts.join(" ").trim();
 
-      if (goal.length === 0) {
+      if (goal.length === 0 && !commandOptions.template) {
         io.writeErr("Mission goal is required.\nUsage: narthynx mission \"Prepare my launch checklist\"\n");
         process.exitCode = 1;
         return;
       }
 
       try {
-        const mission = await missionStore.createMission({ goal });
+        const mission = await missionStore.createMission(
+          commandOptions.template ? createMissionInputFromTemplate(commandOptions.template, goal) : { goal }
+        );
         const paths = resolveWorkspacePaths(cwd);
 
         io.writeOut("Mission created\n");
         io.writeOut(`id: ${mission.id}\n`);
         io.writeOut(`title: ${mission.title}\n`);
         io.writeOut(`state: ${mission.state}\n`);
+        if (commandOptions.template) {
+          io.writeOut(`template: ${commandOptions.template}\n`);
+        }
         io.writeOut(`path: ${missionFilePath(paths.missionsDir, mission.id)}\n`);
       } catch (error) {
         writeCliError(io, error);
+      }
+    });
+
+  program
+    .command("templates")
+    .description("List built-in mission templates. (Phase 15)")
+    .action(() => {
+      io.writeOut("Mission templates\n");
+      for (const template of listMissionTemplates()) {
+        io.writeOut(`${template.name}  risk=${template.riskProfile.level}  ${template.description}\n`);
       }
     });
 
@@ -312,6 +337,42 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
         for (const [index, event] of events.entries()) {
           io.writeOut(`${index + 1}. ${event.timestamp}  ${event.type}  ${event.summary}\n`);
         }
+      } catch (error) {
+        writeCliError(io, error);
+      }
+    });
+
+  program
+    .command("context")
+    .description("Show or update mission context diet metadata. (Phase 15)")
+    .argument("<mission-id>", "Mission ID")
+    .option("--note <text>", "Append a mission context note")
+    .option("--file <path>", "Attach a safe local file to mission context")
+    .option("--reason <text>", "Reason for attaching a file")
+    .action(async (missionId: string, commandOptions: { note?: string; file?: string; reason?: string }) => {
+      try {
+        if (commandOptions.note && commandOptions.file) {
+          throw new Error("Use either --note or --file, not both.");
+        }
+
+        if (commandOptions.note) {
+          await contextService.addNote(missionId, commandOptions.note);
+          io.writeOut(`Context note added: ${missionId}\n`);
+          io.writeOut(`${await contextService.renderContextSummary(missionId)}\n`);
+          return;
+        }
+
+        if (commandOptions.file) {
+          if (!commandOptions.reason) {
+            throw new Error("--reason is required with --file.");
+          }
+          await contextService.addFile(missionId, commandOptions.file, commandOptions.reason);
+          io.writeOut(`Context file attached: ${commandOptions.file}\n`);
+          io.writeOut(`${await contextService.renderContextSummary(missionId)}\n`);
+          return;
+        }
+
+        io.writeOut(`${await contextService.renderContextSummary(missionId)}\n`);
       } catch (error) {
         writeCliError(io, error);
       }
@@ -498,6 +559,21 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
     .action(async (missionId: string) => {
       try {
         io.writeOut(await replayService.renderMissionReplay(missionId));
+      } catch (error) {
+        writeCliError(io, error);
+      }
+    });
+
+  program
+    .command("proof")
+    .description("Generate a compact local mission proof card. (Phase 15)")
+    .argument("<mission-id>", "Mission ID")
+    .action(async (missionId: string) => {
+      try {
+        const result = await proofCardService.generateProofCard(missionId);
+        io.writeOut(`${result.regenerated ? "Proof card regenerated" : "Proof card created"}\n`);
+        io.writeOut(`artifact: ${result.artifact.id}\n`);
+        io.writeOut(`path: ${result.path}\n`);
       } catch (error) {
         writeCliError(io, error);
       }

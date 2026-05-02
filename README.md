@@ -14,7 +14,7 @@ A mission is an inspectable unit of work with a goal, success criteria, plan gra
 
 ## Current Status
 
-Narthynx has completed the Phase 0-14 MVP track described in `Narthynx_Codex_AGENTS.md`.
+Narthynx has completed the Phase 0–15 MVP track described in `Narthynx_Codex_AGENTS.md` and `docs/roadmap.md` (including Mission Kit and Phase 15.5 interactive UX).
 
 Implemented:
 
@@ -26,11 +26,12 @@ Implemented:
 - Typed tool runner for filesystem, Git, report, shell, and model-adjacent workflows.
 - Policy, risk classification, approval queue, checkpoints, and basic rewind.
 - Markdown mission reports, ledger replay, and model/cost summaries.
-- Dependency-free interactive shell with status lines and slash commands.
+- Interactive mission shell with status lines, slash commands, natural-language goals, `/graph`, `/mode`, and Mission Kit shortcuts (see `docs/cli-ux.md`).
 - Approval-gated `shell.run` plus read-only `git.diff` and `git.log`.
 - Stub-first model provider abstraction with optional OpenAI-compatible routing.
 - Bounded mission executor vertical slice with read-only steps, approval pause/resume, final reports, and replay.
 - Open-source polish docs, examples, templates, and release checklist.
+- Phase 15 Mission Kit: templates, context diet (`context.md` / `context.json`), and local proof cards.
 
 Narthynx intentionally fails honestly for behavior outside the current runtime. It does not pretend later-phase integrations exist.
 
@@ -69,23 +70,42 @@ pnpm build
 pnpm test
 ```
 
-Run the CLI from source:
-
-```bash
-pnpm narthynx --help
-pnpm narthynx --version
-```
-
 ## Quickstart
 
-Initialize a local workspace:
+Primary usage: open the **interactive mission shell** once and work from there (natural-language goals, slash commands, and shortcuts). One-shot `narthynx <subcommand>` remains for scripting and CI.
+
+```bash
+pnpm narthynx
+```
+
+You should see the Narthynx intro, a status line, and a prompt such as `narthynx ❯`. Type a mission goal in plain language (no `/` prefix) to create a mission, or use `/help`.
+
+Example session:
+
+```txt
+NARTHYNX
+Local-first Mission Agent OS
+...
+Type a goal, or use /help.
+Narthynx  mode: Ask  mission: none  state: none  policy: ask  model: auto
+narthynx ❯ Prepare my launch checklist from this repo
+```
+
+Initialize a local workspace (required before missions):
 
 ```bash
 pnpm narthynx init
 pnpm narthynx doctor
 ```
 
-This creates local, human-readable state:
+Show the full CLI surface:
+
+```bash
+pnpm narthynx --help
+pnpm narthynx --version
+```
+
+After `pnpm narthynx init`, your repo contains:
 
 ```txt
 .narthynx/
@@ -98,6 +118,8 @@ Create a mission:
 
 ```bash
 pnpm narthynx mission "Prepare my launch checklist from this repo"
+pnpm narthynx templates
+pnpm narthynx mission --template bug-investigation
 pnpm narthynx missions
 pnpm narthynx open <mission-id>
 pnpm narthynx plan <mission-id>
@@ -128,6 +150,7 @@ Inspect the durable outputs:
 
 ```bash
 pnpm narthynx report <mission-id>
+pnpm narthynx proof <mission-id>
 pnpm narthynx replay <mission-id>
 pnpm narthynx timeline <mission-id>
 pnpm narthynx cost <mission-id>
@@ -135,31 +158,42 @@ pnpm narthynx cost <mission-id>
 
 ## Interactive Mode
 
-Running `pnpm narthynx` with no arguments opens the mission-first shell:
+Running `pnpm narthynx` with no arguments opens the **interactive mission shell** (readline-based). See `docs/cli-ux.md` for the full intro, prompts, Windows notes, and slash reference.
+
+Example:
 
 ```txt
-Narthynx interactive
-Local-first Mission Agent OS. Persistent missions. Approval-gated actions. Replayable execution.
-Type /help for commands or /exit to leave.
-Narthynx  mode: Ask  mission: none  state: none  risk: none  model: stub
-nx>
+NARTHYNX
+Local-first Mission Agent OS
+Persistent missions. Approval-gated actions. Replayable execution.
+...
+narthynx ❯
 ```
 
 The same flow works with slash commands:
 
 ```txt
 /mission "Prepare my launch checklist from this repo"
+/templates
+/mission --template bug-investigation
 /plan
+/graph
 /run
+/mode plan
+/context --note "Remember the release blocker"
+/context --file notes.md --reason "safe launch notes"
+/tool filesystem.list --input '{"path":"."}'
+/timeline
 /approve
 /resume
 /report
+/proof
 /replay
 /cost
 /help
 ```
 
-The `! <command>` shortcut creates an approval for typed `shell.run`; it does not execute shell commands silently. `@ <path>` and `# <note>` remain future context/memory shortcuts and print honest messages.
+The `! <command>` shortcut requests approval for `shell.run`; it does not execute commands silently. `@ <path>` attaches safe file context to the current mission, and `# <note>` appends a mission context note (or `workspace-notes.md` when no mission is selected).
 
 ## Command Reference
 
@@ -257,6 +291,8 @@ See:
 
 Each example is local-first, copyable, and avoids secrets, network calls, destructive shell commands, and unsupported autonomy claims.
 
+Phase 15 adds local Mission Kit primitives only: reusable mission templates, `context.md`/`context.json` context diet records, and local Markdown proof cards. It does not add browser automation, MCP, GitHub, hosted sync, external communication, or a web cockpit.
+
 ## Development
 
 ```bash
@@ -271,7 +307,9 @@ Before opening a PR, run the relevant tests and update docs when behavior change
 
 ## Roadmap
 
-The MVP track through Phase 14 is complete. Phase 15 and beyond remain post-MVP exploration:
+Phase 15 Mission Kit and Phase 15.5 interactive shell UX are shipped. The MVP track through Phase 14 plus Mission Kit is complete. See `CHANGELOG.md` and `docs/roadmap.md`.
+
+Post-MVP exploration:
 
 - local web cockpit
 - visual mission graph
@@ -279,9 +317,7 @@ The MVP track through Phase 14 is complete. Phase 15 and beyond remain post-MVP 
 - browser connector
 - MCP connector
 - GitHub connector
-- mission templates
-- proof cards
-- context diet engine
+- deeper context diet / memory engine
 - cloud/local hybrid execution
 - safe team collaboration
 - encrypted mission vault

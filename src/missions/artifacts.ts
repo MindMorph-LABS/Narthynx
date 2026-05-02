@@ -16,7 +16,7 @@ export const OUTPUTS_DIR_NAME = "outputs";
 export const artifactSchema = z.object({
   id: z.string().regex(/^art_[a-z0-9_-]+$/),
   missionId: z.string().regex(/^m_[a-z0-9_-]+$/),
-  type: z.enum(["report", "command_output", "git_diff", "git_log"]),
+  type: z.enum(["report", "command_output", "git_diff", "git_log", "proof_card"]),
   path: z.string().min(1),
   title: z.string().min(1),
   createdAt: z.string().datetime(),

@@ -19,7 +19,7 @@ Narthynx is built in phases. Each phase must leave the repo runnable and testabl
 - Phase 12: Complete
 - Phase 13: Complete
 - Phase 14: Complete
-- Phase 15: Post-MVP only
+- Phase 15: Complete
 
 ## Phases
 
@@ -40,7 +40,8 @@ Narthynx is built in phases. Each phase must leave the repo runnable and testabl
 | 12 | Model Provider Abstraction | Complete | Prepare model routing without locking to one provider |
 | 13 | Mission Executor Vertical Slice | Complete | Run the MVP flow end to end |
 | 14 | Open-Source Polish | Complete | Prepare public repo quality, examples, docs, issue templates, and release checklist |
-| 15 | Post-MVP SOTA Extensions | Post-MVP only | Explore advanced extensions after the mission runtime is solid |
+| 15 | Mission Kit | Complete | Add templates, context diet basics, proof cards, and Phase 15.5 interactive shell UX |
+| 16+ | Post-MVP SOTA Extensions | Post-MVP only | Explore advanced connectors and cockpit features after Mission Kit primitives |
 
 ## MVP Success Definition
 
@@ -67,9 +68,6 @@ Do not start these before the MVP is complete and stable:
 - browser connector
 - MCP connector
 - GitHub connector
-- mission templates
-- proof cards
-- context diet engine
 - local model routing
 - cloud/local hybrid execution
 - safe team collaboration

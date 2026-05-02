@@ -120,6 +120,21 @@ describe("Narthynx CLI", () => {
     expect(result.stdout).toContain("6. [artifact] Generate final report - pending");
   });
 
+  it("lists templates and creates a template mission from the CLI", async () => {
+    const cwd = await tempWorkspaceRoot();
+    await runCli(["init"], { cwd });
+    const templates = await runCli(["templates"], { cwd });
+    const created = await runCli(["mission", "--template", "bug-investigation"], { cwd });
+    const id = created.stdout.match(/id: (m_[^\s]+)/)?.[1];
+    const opened = await runCli(["open", id ?? ""], { cwd });
+
+    expect(templates.exitCode).toBe(0);
+    expect(templates.stdout).toContain("bug-investigation");
+    expect(created.exitCode).toBe(0);
+    expect(created.stdout).toContain("template: bug-investigation");
+    expect(opened.stdout).toContain("title: Bug investigation");
+  });
+
   it("regenerates a mission plan through the stub model provider and records cost", async () => {
     const cwd = await tempWorkspaceRoot();
     await runCli(["init"], { cwd });
@@ -235,6 +250,36 @@ describe("Narthynx CLI", () => {
     expect(result.stdout).toContain("git.status");
     expect(result.stdout).toContain("report.write");
     expect(result.stdout).toContain("shell.run");
+  });
+
+  it("adds context notes and files and generates proof cards from the CLI", async () => {
+    const cwd = await tempWorkspaceRoot();
+    await runCli(["init"], { cwd });
+    await writeFile(path.join(cwd, "notes.md"), "safe context\n", "utf8");
+    const created = await runCli(["mission", "Prepare launch checklist"], { cwd });
+    const id = created.stdout.match(/id: (m_[^\s]+)/)?.[1];
+
+    expect(id).toBeDefined();
+    const note = await runCli(["context", id ?? "", "--note", "Focus on release blockers."], { cwd });
+    const file = await runCli(["context", id ?? "", "--file", "notes.md", "--reason", "safe notes"], { cwd });
+    const summary = await runCli(["context", id ?? ""], { cwd });
+    const proof = await runCli(["proof", id ?? ""], { cwd });
+    const report = await runCli(["report", id ?? ""], { cwd });
+    const proofPath = path.join(cwd, ".narthynx", "missions", id ?? "", "artifacts", "proof-card.md");
+
+    expect(note.exitCode).toBe(0);
+    expect(note.stdout).toContain("Context note added");
+    expect(file.exitCode).toBe(0);
+    expect(file.stdout).toContain("Context file attached");
+    expect(summary.stdout).toContain("estimated tokens:");
+    expect(summary.stdout).toContain("notes.md");
+    expect(proof.exitCode).toBe(0);
+    expect(proof.stdout).toContain("Proof card created");
+    await expect(readFile(proofPath, "utf8")).resolves.toContain("Proof Card");
+    expect(report.stdout).toContain("Report");
+    await expect(readFile(path.join(cwd, ".narthynx", "missions", id ?? "", "artifacts", "report.md"), "utf8")).resolves.toContain(
+      "Proof card artifact: artifacts/proof-card.md"
+    );
   });
 
   it("runs a read-only filesystem tool from the CLI", async () => {
