@@ -162,3 +162,13 @@ Mission state remains local and inspectable:
 ```
 
 If a future change introduces a new mission file, it should be documented here and covered by tests that prove restart-safe behavior.
+
+## Phase 15 Mission Kit
+
+Phase 15 adds mission-native helpers without changing the core mission contract:
+
+- mission templates create ordinary missions with preset titles, goals, success criteria, risk hints, and the standard plan graph
+- context diet commands maintain human-readable `context.md` and structured `context.json`
+- proof cards create compact Markdown artifacts at `artifacts/proof-card.md`
+
+These features must use existing mission stores, ledger events, artifacts, reports, and replay surfaces rather than bypassing persisted state.

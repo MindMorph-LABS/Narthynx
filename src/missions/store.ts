@@ -64,8 +64,8 @@ export function createMissionStore(cwd = process.cwd()): MissionStore {
         },
         state: "created",
         riskProfile: {
-          level: "low",
-          reasons: ["Initial mission has no actions yet."]
+          level: input.riskProfile?.level ?? "low",
+          reasons: input.riskProfile?.reasons ?? ["Initial mission has no actions yet."]
         },
         checkpoints: [],
         approvals: [],
@@ -92,7 +92,8 @@ export function createMissionStore(cwd = process.cwd()): MissionStore {
         details: {
           title: parsed.title,
           goal: parsed.goal,
-          state: parsed.state
+          state: parsed.state,
+          templateName: input.templateName
         },
         timestamp: parsed.createdAt
       });
@@ -102,7 +103,8 @@ export function createMissionStore(cwd = process.cwd()): MissionStore {
         summary: "Deterministic MVP plan graph created.",
         details: {
           nodeCount: graph.nodes.length,
-          edgeCount: graph.edges.length
+          edgeCount: graph.edges.length,
+          templateName: input.templateName
         },
         timestamp: graph.createdAt
       });

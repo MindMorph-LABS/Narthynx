@@ -1,4 +1,4 @@
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -42,10 +42,15 @@ describe("interactive session", () => {
     });
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Narthynx interactive");
-    expect(result.stdout).toContain("Narthynx slash commands");
+    expect(result.stdout).toContain("NARTHYNX");
+    expect(result.stdout).toContain("Narthynx slash commands (full reference:");
+    expect(result.stdout).toContain("Missions & planning");
+    expect(result.stdout).toContain("/mode [plan|ask]");
     expect(result.stdout).toContain("/cost [mission-id]");
+    expect(result.stdout).toContain("/graph [mission-id]");
+    expect(result.stdout).toContain("/report /proof /replay [id]");
     expect(result.stdout).toContain("Exiting Narthynx interactive.");
+    expect(result.stdout).toContain("Mission state saved.");
   });
 
   it("reports unhealthy and healthy workspace status", async () => {
@@ -84,6 +89,26 @@ describe("interactive session", () => {
     expect(result.stdout).toContain(`Replay for ${missionId}: Prepare launch checklist`);
     expect(result.stdout).toContain(`Cost for ${missionId}`);
     expect(result.stdout).toContain("model calls: 0");
+  });
+
+  it("uses templates, context shortcuts, and proof cards with current mission inference", async () => {
+    const cwd = await tempWorkspaceRoot();
+    await initWorkspace(cwd);
+    await writeFile(path.join(cwd, "notes.md"), "safe context\n", "utf8");
+
+    const result = await runInteractiveSession({
+      cwd,
+      inputLines: ["/templates", "/mission --template bug-investigation", "# remember the failing CLI path", "@ notes.md", "/context", "/proof", "/exit"]
+    });
+    const missionId = result.stdout.match(/Mission (m_[^\s]+)/)?.[1];
+
+    expect(result.exitCode).toBe(0);
+    expect(missionId).toBeDefined();
+    expect(result.stdout).toContain("bug-investigation");
+    expect(result.stdout).toContain("Context note added");
+    expect(result.stdout).toContain("Context file attached");
+    expect(result.stdout).toContain("estimated tokens:");
+    expect(result.stdout).toContain("Proof card created");
   });
 
   it("supports model planning and cost summaries with current mission inference", async () => {
@@ -164,17 +189,17 @@ describe("interactive session", () => {
       inputLines: ['/mission "Prepare launch checklist"', "! node --version", "/exit"]
     });
 
-    expect(result.stdout).toContain("shell.run requires approval");
-    expect(result.stdout).toContain("narthynx approve a_");
+    expect(result.stdout).toContain("Approval required");
+    expect(result.stdout).toContain("shell.run");
+    expect(result.stdout).toMatch(/\/approve a_[a-z0-9_-]+/);
   });
 
-  it("keeps context and memory shortcuts honest future work", async () => {
+  it("reports context shortcuts clearly when no current mission is selected", async () => {
     const result = await runInteractiveSession({
       inputLines: ["@ README.md", "# remember this", "/exit"]
     });
 
-    expect(result.stdout).toContain("Context attachment shortcuts are reserved for a future context workflow");
-    expect(result.stdout).toContain("Mission memory shortcuts are reserved for a future memory workflow");
+    expect(result.stderr).toContain("No current mission. Run /mission <goal> or /mission <mission-id>.");
   });
 
   it("executes approved shell.run from interactive approval", async () => {
@@ -231,6 +256,8 @@ describe("interactive session", () => {
     });
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Unknown slash command: /unknown");
+    expect(result.stderr).toContain("Unknown slash command: /unknown");
+    expect(result.stderr).toContain("Try /help");
+    expect(result.stderr).toContain("Common:");
   });
 });

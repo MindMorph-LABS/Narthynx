@@ -130,3 +130,9 @@ Phase 14 examples and public docs must preserve the safety model:
 - no fake screenshots or fabricated outputs
 - no unsupported autonomy claims
 - no instructions that bypass policy, approvals, ledgers, reports, or replay
+
+## Phase 15 Mission Kit Safety
+
+Mission templates, context diet, and proof cards are local-only. Context file attachment uses the same workspace path guard and policy deny patterns as safe filesystem reads, so `.env`, SSH keys, token-like files, and paths outside the workspace remain blocked.
+
+Proof cards are local Markdown artifacts. They are not hosted share links and do not send mission state externally.

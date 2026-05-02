@@ -65,3 +65,7 @@ The executor does not use `shell.run`, cloud model routing, external communicati
 ## Phase 14 Documentation Rules
 
 Connector docs and examples must describe implemented behavior only. Post-MVP connector candidates such as browser automation, MCP, GitHub, email, calendar, and hosted sync remain out of scope until they are implemented as typed tools with schemas, policy classification, approval behavior, ledger records, artifacts where useful, and tests.
+
+## Phase 15 Mission Kit Is Not A Connector
+
+Templates, context diet, and proof cards are local mission primitives, not external connectors. They do not add browser automation, MCP, GitHub, email, calendar, network calls, hosted sync, or external communication.

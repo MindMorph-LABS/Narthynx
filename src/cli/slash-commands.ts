@@ -8,17 +8,16 @@ import { createCheckpointStore } from "../missions/checkpoints";
 import { createReplayService } from "../missions/replay";
 import { createReportService } from "../missions/reports";
 import { createMissionStore } from "../missions/store";
+import { createMissionContextService } from "../missions/context";
+import { createProofCardService } from "../missions/proof-card";
+import { createMissionInputFromTemplate, listMissionTemplates } from "../missions/templates";
 import { createToolRegistry } from "../tools/registry";
 import { createToolRunner } from "../tools/runner";
-import {
-  renderApprovals,
-  renderDoctor,
-  renderInteractiveHelp,
-  renderMissionList,
-  renderMissionSummary,
-  renderPolicy,
-  renderTools
-} from "./renderer";
+import type { Renderer } from "./renderer";
+import { isCockpitMode, type InteractiveSessionState } from "./session";
+import { tokenizeSlashRest } from "./tokenize";
+
+export { parseShellShortcut } from "./shortcuts";
 
 export interface ParsedSlashCommand {
   raw: string;
@@ -26,21 +25,27 @@ export interface ParsedSlashCommand {
   args: string[];
 }
 
+export interface PendingApprovalInteractive {
+  approvalId: string;
+  missionId: string;
+}
+
 export type SlashCommandResult =
   | {
       exit: true;
-      output: string;
       currentMissionId?: string;
     }
   | {
       exit: false;
-      output: string;
       currentMissionId?: string;
+      pendingApproval?: PendingApprovalInteractive;
     };
 
 export interface SlashCommandContext {
   cwd: string;
   currentMissionId?: string;
+  session: InteractiveSessionState;
+  renderer: Renderer;
 }
 
 export function parseSlashCommand(line: string): ParsedSlashCommand {
@@ -49,7 +54,7 @@ export function parseSlashCommand(line: string): ParsedSlashCommand {
     throw new Error("Slash command must start with /.");
   }
 
-  const tokens = tokenize(trimmed.slice(1));
+  const tokens = tokenizeSlashRest(trimmed.slice(1));
   const [name, ...args] = tokens;
   if (!name) {
     throw new Error("Slash command is required. Type /help for commands.");
@@ -62,65 +67,65 @@ export function parseSlashCommand(line: string): ParsedSlashCommand {
   };
 }
 
-export function parseShellShortcut(line: string): { command: string; args: string[] } {
-  const trimmed = line.trim();
-  if (!trimmed.startsWith("!")) {
-    throw new Error("Shell shortcut must start with !.");
-  }
-
-  const tokens = tokenize(trimmed.slice(1).trim());
-  const [command, ...args] = tokens;
-  if (!command) {
-    throw new Error("Shell command is required after !.");
-  }
-
-  return { command, args };
-}
-
 export async function dispatchSlashCommand(
   command: ParsedSlashCommand,
   context: SlashCommandContext
 ): Promise<SlashCommandResult> {
   const stores = createInteractiveStores(context.cwd);
+  const { renderer } = context;
 
   switch (command.name) {
     case "help":
-      return stay(renderInteractiveHelp(), context.currentMissionId);
+      renderer.help();
+      return stay(context.currentMissionId);
     case "exit":
     case "quit":
-      return {
-        exit: true,
-        output: "Exiting Narthynx interactive.",
-        currentMissionId: context.currentMissionId
-      };
+      renderer.info("Exiting Narthynx interactive.");
+      return exit(context.currentMissionId);
+    case "clear":
+      renderer.clear();
+      return stay(context.currentMissionId);
     case "doctor": {
-      return stay(renderDoctor(await doctorWorkspace(context.cwd)), context.currentMissionId);
+      renderer.doctor(await doctorWorkspace(context.cwd));
+      return stay(context.currentMissionId);
     }
     case "policy": {
       const paths = resolveWorkspacePaths(context.cwd);
       const policy = await loadWorkspacePolicy(paths.policyFile);
       if (!policy.ok) {
-        return stay(`policy.yaml invalid: ${policy.message}`, context.currentMissionId);
+        renderer.renderError(`policy.yaml invalid: ${policy.message}`);
+        return stay(context.currentMissionId);
       }
-
-      return stay(renderPolicy(policy.value, policy.path), context.currentMissionId);
+      renderer.policy(policy.value, policy.path);
+      return stay(context.currentMissionId);
     }
     case "tools":
-      return stay(renderTools(stores.toolRegistry.list()), context.currentMissionId);
+      renderer.tools(stores.toolRegistry.list());
+      return stay(context.currentMissionId);
     case "missions":
-      return stay(renderMissionList(await stores.missionStore.listMissions()), context.currentMissionId);
+      renderer.missionList(await stores.missionStore.listMissions());
+      return stay(context.currentMissionId);
+    case "templates":
+      renderer.templates(listMissionTemplates());
+      return stay(context.currentMissionId);
     case "mission":
       return handleMissionCommand(command.args, context, stores);
     case "plan":
       return handlePlanCommand(command.args, context, stores);
+    case "graph":
+      return handleGraphCommand(command.args, context, stores);
     case "run":
       return handleRunCommand(command.args, context, stores);
     case "timeline":
       return handleTimelineCommand(command.args, context, stores);
     case "report":
       return handleReportCommand(command.args, context, stores);
+    case "proof":
+      return handleProofCommand(command.args, context, stores);
     case "replay":
       return handleReplayCommand(command.args, context, stores);
+    case "context":
+      return handleContextCommand(command.args, context, stores);
     case "cost":
       return handleCostCommand(command.args, context, stores);
     case "approve":
@@ -133,8 +138,14 @@ export async function dispatchSlashCommand(
       return handleResumeCommand(command.args, context, stores);
     case "tool":
       return handleToolCommand(command.args, context, stores);
+    case "mode":
+      return handleModeCommand(command.args, context);
     default:
-      return stay(`Unknown slash command: /${command.name}\nType /help for commands.`, context.currentMissionId);
+      renderer.warn(
+        `Unknown slash command: /${command.name}\n` +
+          "Try /help for the full list. Common: /mission, /run, /plan, /doctor, /exit."
+      );
+      return stay(context.currentMissionId);
   }
 }
 
@@ -146,6 +157,8 @@ function createInteractiveStores(cwd: string) {
     checkpointStore: createCheckpointStore(cwd),
     reportService: createReportService(cwd),
     replayService: createReplayService(cwd),
+    contextService: createMissionContextService(cwd),
+    proofCardService: createProofCardService(cwd),
     costService: createCostService(cwd),
     modelPlanner: createModelPlanner(cwd),
     executor: createMissionExecutor(cwd),
@@ -159,22 +172,37 @@ async function handleMissionCommand(
   context: SlashCommandContext,
   stores: ReturnType<typeof createInteractiveStores>
 ): Promise<SlashCommandResult> {
+  const { renderer } = context;
   if (args.length === 0) {
     if (!context.currentMissionId) {
-      return stay("No current mission. Run /mission <goal> or /mission <mission-id>.", context.currentMissionId);
+      renderer.warn("No current mission. Run /mission <goal> or /mission <mission-id>.");
+      return stay(context.currentMissionId);
     }
 
-    return stay(renderMissionSummary(await stores.missionStore.readMission(context.currentMissionId)), context.currentMissionId);
+    renderer.missionSummary(await stores.missionStore.readMission(context.currentMissionId));
+    return stay(context.currentMissionId);
   }
 
-  const value = args.join(" ").trim();
+  const parsed = parseMissionArgs(args);
+  if (parsed.templateName) {
+    const mission = await stores.missionStore.createMission(createMissionInputFromTemplate(parsed.templateName, parsed.goal));
+    renderer.info(`Mission created and selected\ntemplate: ${parsed.templateName}`);
+    renderer.missionSummary(mission);
+    return stay(mission.id);
+  }
+
+  const value = parsed.goal;
   if (isMissionId(value)) {
     const mission = await stores.missionStore.readMission(value);
-    return stay(`Switched mission\n${renderMissionSummary(mission)}`, mission.id);
+    renderer.info("Switched mission");
+    renderer.missionSummary(mission);
+    return stay(mission.id);
   }
 
   const mission = await stores.missionStore.createMission({ goal: value });
-  return stay(`Mission created and selected\n${renderMissionSummary(mission)}`, mission.id);
+  renderer.info("Mission created and selected");
+  renderer.missionSummary(mission);
+  return stay(mission.id);
 }
 
 async function handlePlanCommand(
@@ -187,13 +215,24 @@ async function handlePlanCommand(
     ? (await stores.modelPlanner.generatePlan(parsed.missionId)).graph
     : await stores.missionStore.ensureMissionPlanGraph(parsed.missionId);
 
-  return stay(
-    [
-      `Plan for ${parsed.missionId}${parsed.useModel ? " (model)" : ""}`,
-      ...graph.nodes.map((node, index) => `${index + 1}. [${node.type}] ${node.title} - ${node.status}`)
-    ].join("\n"),
-    parsed.missionId
-  );
+  const lines = graph.nodes.map((node, index) => `${index + 1}. [${node.type}] ${node.title} - ${node.status}`);
+  rendererPlan(context, parsed.missionId, lines, parsed.useModel ? " (model)" : "");
+  return stay(parsed.missionId);
+}
+
+function rendererPlan(context: SlashCommandContext, missionId: string, lines: string[], modelSuffix: string): void {
+  context.renderer.plan(missionId, lines, modelSuffix);
+}
+
+async function handleGraphCommand(
+  args: string[],
+  context: SlashCommandContext,
+  stores: ReturnType<typeof createInteractiveStores>
+): Promise<SlashCommandResult> {
+  const missionId = resolveMissionArgument(args, context.currentMissionId);
+  const graph = await stores.missionStore.readMissionPlanGraph(missionId);
+  context.renderer.graph(graph);
+  return stay(missionId);
 }
 
 async function handleTimelineCommand(
@@ -204,17 +243,8 @@ async function handleTimelineCommand(
   const missionId = resolveMissionArgument(args, context.currentMissionId);
   await stores.missionStore.readMission(missionId);
   const events = await stores.missionStore.readMissionLedger(missionId, { allowMissing: true });
-
-  if (events.length === 0) {
-    return stay(`No ledger events found for mission ${missionId}.`, missionId);
-  }
-
-  return stay(
-    [`Timeline for ${missionId}`, ...events.map((event, index) => `${index + 1}. ${event.timestamp}  ${event.type}  ${event.summary}`)].join(
-      "\n"
-    ),
-    missionId
-  );
+  context.renderer.timeline(missionId, events);
+  return stay(missionId);
 }
 
 async function handleRunCommand(
@@ -224,108 +254,7 @@ async function handleRunCommand(
 ): Promise<SlashCommandResult> {
   const missionId = resolveMissionArgument(args, context.currentMissionId);
   const result = await stores.executor.runMission(missionId);
-  return stay(result.output, missionId);
-}
-
-async function handleReportCommand(
-  args: string[],
-  context: SlashCommandContext,
-  stores: ReturnType<typeof createInteractiveStores>
-): Promise<SlashCommandResult> {
-  const missionId = resolveMissionArgument(args, context.currentMissionId);
-  const result = await stores.reportService.generateMissionReport(missionId);
-
-  return stay(
-    [`${result.regenerated ? "Report regenerated" : "Report created"}`, `artifact: ${result.artifact.id}`, `path: ${result.path}`].join(
-      "\n"
-    ),
-    missionId
-  );
-}
-
-async function handleReplayCommand(
-  args: string[],
-  context: SlashCommandContext,
-  stores: ReturnType<typeof createInteractiveStores>
-): Promise<SlashCommandResult> {
-  const missionId = resolveMissionArgument(args, context.currentMissionId);
-  return stay(await stores.replayService.renderMissionReplay(missionId), missionId);
-}
-
-async function handleCostCommand(
-  args: string[],
-  context: SlashCommandContext,
-  stores: ReturnType<typeof createInteractiveStores>
-): Promise<SlashCommandResult> {
-  const missionId = resolveMissionArgument(args, context.currentMissionId);
-  return stay(await stores.costService.renderMissionCost(missionId), missionId);
-}
-
-async function handleApproveCommand(
-  args: string[],
-  context: SlashCommandContext,
-  stores: ReturnType<typeof createInteractiveStores>
-): Promise<SlashCommandResult> {
-  const parsed = parseApprovalArgs(args);
-  if (!parsed.approvalId) {
-    return stay(renderApprovals(await stores.approvalStore.listPendingApprovals()), context.currentMissionId);
-  }
-
-  const decision = parsed.deny ? "denied" : "approved";
-  const approval = await stores.approvalStore.decideApproval(parsed.approvalId, decision, parsed.reason);
-  const output = [`Approval ${approval.status}: ${approval.id}`, `mission: ${approval.missionId}`, `tool: ${approval.toolName}`];
-
-  if (approval.status === "approved") {
-    const continuation = await stores.toolRunner.runApprovedTool(approval.id);
-    if (continuation.ok) {
-      output.push("Approved action executed.");
-      if (continuation.checkpointId) {
-        output.push(`checkpoint: ${continuation.checkpointId}`);
-      }
-      output.push(JSON.stringify(continuation.output, null, 2));
-    } else {
-      output.push(continuation.message);
-    }
-  } else {
-    output.push("Recorded denial. The action was not executed.");
-  }
-
-  return stay(output.join("\n"), approval.missionId);
-}
-
-async function handleRewindCommand(
-  args: string[],
-  context: SlashCommandContext,
-  stores: ReturnType<typeof createInteractiveStores>
-): Promise<SlashCommandResult> {
-  if (args.length === 0) {
-    return stay("Checkpoint ID is required.\nUsage: /rewind <checkpoint-id> [mission-id]", context.currentMissionId);
-  }
-
-  const [checkpointId, explicitMissionId] = args;
-  const missionId = explicitMissionId ?? requireCurrentMission(context.currentMissionId);
-  await stores.missionStore.readMission(missionId);
-  const result = await stores.checkpointStore.rewindCheckpoint(missionId, checkpointId);
-
-  return stay(
-    [
-      `Checkpoint rewound: ${result.checkpoint.id}`,
-      `path: ${result.checkpoint.targetPath}`,
-      `file rollback: ${result.fileRollback ? "yes" : "no"}`,
-      result.message
-    ].join("\n"),
-    missionId
-  );
-}
-
-async function handlePauseCommand(
-  args: string[],
-  context: SlashCommandContext,
-  stores: ReturnType<typeof createInteractiveStores>
-): Promise<SlashCommandResult> {
-  const missionId = resolveMissionArgument(args, context.currentMissionId);
-  const result = await stores.executor.pauseMission(missionId);
-  return stay(result.output, missionId);
+  return finishExecutorOutput(result, missionId, context, stores);
 }
 
 async function handleResumeCommand(
@@ -335,7 +264,166 @@ async function handleResumeCommand(
 ): Promise<SlashCommandResult> {
   const missionId = resolveMissionArgument(args, context.currentMissionId);
   const result = await stores.executor.resumeMission(missionId);
-  return stay(result.output, missionId);
+  return finishExecutorOutput(result, missionId, context, stores);
+}
+
+async function finishExecutorOutput(
+  result: Awaited<ReturnType<ReturnType<typeof createMissionExecutor>["runMission"]>>,
+  missionId: string,
+  context: SlashCommandContext,
+  stores: ReturnType<typeof createInteractiveStores>
+): Promise<SlashCommandResult> {
+  context.renderer.rawBlock(result.output.trimEnd());
+  if (result.status === "paused_for_approval" && result.approvalId) {
+    const approval = await stores.approvalStore.getApproval(result.approvalId);
+    const mission = await stores.missionStore.readMission(missionId);
+    context.renderer.approvalPrompt(approval, mission.title);
+    return {
+      exit: false,
+      currentMissionId: missionId,
+      pendingApproval: { approvalId: result.approvalId, missionId }
+    };
+  }
+  return stay(missionId);
+}
+
+async function handleReportCommand(
+  args: string[],
+  context: SlashCommandContext,
+  stores: ReturnType<typeof createInteractiveStores>
+): Promise<SlashCommandResult> {
+  const missionId = resolveMissionArgument(args, context.currentMissionId);
+  const result = await stores.reportService.generateMissionReport(missionId);
+  context.renderer.info(
+    [`${result.regenerated ? "Report regenerated" : "Report created"}`, `artifact: ${result.artifact.id}`, `path: ${result.path}`].join("\n")
+  );
+  return stay(missionId);
+}
+
+async function handleProofCommand(
+  args: string[],
+  context: SlashCommandContext,
+  stores: ReturnType<typeof createInteractiveStores>
+): Promise<SlashCommandResult> {
+  const missionId = resolveMissionArgument(args, context.currentMissionId);
+  const result = await stores.proofCardService.generateProofCard(missionId);
+  context.renderer.info(
+    [`${result.regenerated ? "Proof card regenerated" : "Proof card created"}`, `artifact: ${result.artifact.id}`, `path: ${result.path}`].join("\n")
+  );
+  return stay(missionId);
+}
+
+async function handleReplayCommand(
+  args: string[],
+  context: SlashCommandContext,
+  stores: ReturnType<typeof createInteractiveStores>
+): Promise<SlashCommandResult> {
+  const missionId = resolveMissionArgument(args, context.currentMissionId);
+  context.renderer.rawBlock((await stores.replayService.renderMissionReplay(missionId)).trimEnd());
+  return stay(missionId);
+}
+
+async function handleCostCommand(
+  args: string[],
+  context: SlashCommandContext,
+  stores: ReturnType<typeof createInteractiveStores>
+): Promise<SlashCommandResult> {
+  const missionId = resolveMissionArgument(args, context.currentMissionId);
+  context.renderer.rawBlock((await stores.costService.renderMissionCost(missionId)).trimEnd());
+  return stay(missionId);
+}
+
+async function handleContextCommand(
+  args: string[],
+  context: SlashCommandContext,
+  stores: ReturnType<typeof createInteractiveStores>
+): Promise<SlashCommandResult> {
+  const parsed = parseContextArgs(args, context.currentMissionId);
+
+  if (parsed.note) {
+    await stores.contextService.addNote(parsed.missionId, parsed.note);
+    context.renderer.info(`Context note added: ${parsed.missionId}`);
+    context.renderer.rawBlock((await stores.contextService.renderContextSummary(parsed.missionId)).trimEnd());
+    return stay(parsed.missionId);
+  }
+
+  if (parsed.file) {
+    await stores.contextService.addFile(parsed.missionId, parsed.file, parsed.reason ?? "");
+    context.renderer.info(`Context file attached: ${parsed.file}`);
+    context.renderer.rawBlock((await stores.contextService.renderContextSummary(parsed.missionId)).trimEnd());
+    return stay(parsed.missionId);
+  }
+
+  context.renderer.rawBlock((await stores.contextService.renderContextSummary(parsed.missionId)).trimEnd());
+  return stay(parsed.missionId);
+}
+
+async function handleApproveCommand(
+  args: string[],
+  context: SlashCommandContext,
+  stores: ReturnType<typeof createInteractiveStores>
+): Promise<SlashCommandResult> {
+  const parsed = parseApprovalArgs(args);
+  if (!parsed.approvalId) {
+    context.renderer.approvals(await stores.approvalStore.listPendingApprovals());
+    return stay(context.currentMissionId);
+  }
+
+  const decision = parsed.deny ? "denied" : "approved";
+  const approval = await stores.approvalStore.decideApproval(parsed.approvalId, decision, parsed.reason);
+  context.renderer.info(`Approval ${approval.status}: ${approval.id}`);
+  context.renderer.info(`mission: ${approval.missionId}`);
+  context.renderer.info(`tool: ${approval.toolName}`);
+
+  if (approval.status === "approved") {
+    const continuation = await stores.toolRunner.runApprovedTool(approval.id);
+    if (continuation.ok) {
+      context.renderer.info("Approved action executed.");
+      if (continuation.checkpointId) {
+        context.renderer.info(`checkpoint: ${continuation.checkpointId}`);
+      }
+      context.renderer.rawBlock(JSON.stringify(continuation.output, null, 2));
+      return stay(approval.missionId);
+    }
+    context.renderer.warn(continuation.message);
+    return stay(approval.missionId);
+  }
+
+  context.renderer.info("Recorded denial. The action was not executed.");
+  return stay(approval.missionId);
+}
+
+async function handleRewindCommand(
+  args: string[],
+  context: SlashCommandContext,
+  stores: ReturnType<typeof createInteractiveStores>
+): Promise<SlashCommandResult> {
+  if (args.length === 0) {
+    context.renderer.warn("Checkpoint ID is required.\nUsage: /rewind <checkpoint-id> [mission-id]");
+    return stay(context.currentMissionId);
+  }
+
+  const [checkpointId, explicitMissionId] = args;
+  const missionId = explicitMissionId ?? requireCurrentMission(context.currentMissionId);
+  await stores.missionStore.readMission(missionId);
+  const result = await stores.checkpointStore.rewindCheckpoint(missionId, checkpointId);
+  context.renderer.info(
+    [`Checkpoint rewound: ${result.checkpoint.id}`, `path: ${result.checkpoint.targetPath}`, `file rollback: ${result.fileRollback ? "yes" : "no"}`, result.message].join(
+      "\n"
+    )
+  );
+  return stay(missionId);
+}
+
+async function handlePauseCommand(
+  args: string[],
+  context: SlashCommandContext,
+  stores: ReturnType<typeof createInteractiveStores>
+): Promise<SlashCommandResult> {
+  const missionId = resolveMissionArgument(args, context.currentMissionId);
+  const result = await stores.executor.pauseMission(missionId);
+  context.renderer.rawBlock(result.output.trimEnd());
+  return stay(missionId);
 }
 
 async function handleToolCommand(
@@ -351,10 +439,22 @@ async function handleToolCommand(
   });
 
   if (!result.ok) {
-    return stay(result.message, parsed.missionId);
+    context.renderer.warn(result.message);
+    if ("approvalId" in result && result.approvalId) {
+      const approval = await stores.approvalStore.getApproval(result.approvalId);
+      const mission = await stores.missionStore.readMission(parsed.missionId);
+      context.renderer.approvalPrompt(approval, mission.title);
+      return {
+        exit: false,
+        currentMissionId: parsed.missionId,
+        pendingApproval: { approvalId: result.approvalId, missionId: parsed.missionId }
+      };
+    }
+    return stay(parsed.missionId);
   }
 
-  return stay(JSON.stringify(result.output, null, 2), parsed.missionId);
+  context.renderer.rawBlock(JSON.stringify(result.output, null, 2));
+  return stay(parsed.missionId);
 }
 
 function resolveMissionArgument(args: string[], currentMissionId: string | undefined): string {
@@ -363,6 +463,102 @@ function resolveMissionArgument(args: string[], currentMissionId: string | undef
   }
 
   return args[0] ?? requireCurrentMission(currentMissionId);
+}
+
+function parseMissionArgs(args: string[]): { templateName?: string; goal: string } {
+  const remaining: string[] = [];
+  let templateName: string | undefined;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const value = args[index];
+    if (value === "--template") {
+      const next = args[index + 1];
+      if (!next) {
+        throw new Error("--template requires a template name.");
+      }
+      templateName = next;
+      index += 1;
+    } else {
+      remaining.push(value);
+    }
+  }
+
+  const goal = remaining.join(" ").trim();
+  if (!templateName && goal.length === 0) {
+    throw new Error("Mission goal is required.");
+  }
+
+  return {
+    templateName,
+    goal
+  };
+}
+
+function parseContextArgs(
+  args: string[],
+  currentMissionId: string | undefined
+): { missionId: string; note?: string; file?: string; reason?: string } {
+  let missionId: string | undefined;
+  let note: string | undefined;
+  let file: string | undefined;
+  let reason: string | undefined;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const value = args[index];
+    if (value === "--note") {
+      const collected = collectFlagText(args, index + 1, ["--file", "--reason"]);
+      note = collected.text;
+      index = collected.nextIndex - 1;
+    } else if (value === "--file") {
+      const next = args[index + 1];
+      if (!next) {
+        throw new Error("--file requires a path.");
+      }
+      file = next;
+      index += 1;
+    } else if (value === "--reason") {
+      const collected = collectFlagText(args, index + 1, ["--note", "--file"]);
+      reason = collected.text;
+      index = collected.nextIndex - 1;
+    } else if (!missionId) {
+      missionId = value;
+    } else {
+      throw new Error(`Unexpected context argument: ${value}`);
+    }
+  }
+
+  if (note && file) {
+    throw new Error("Use either --note or --file, not both.");
+  }
+
+  if (file && !reason) {
+    throw new Error("--reason is required with --file.");
+  }
+
+  return {
+    missionId: missionId ?? requireCurrentMission(currentMissionId),
+    note,
+    file,
+    reason
+  };
+}
+
+function collectFlagText(args: string[], startIndex: number, stopFlags: string[]): { text: string; nextIndex: number } {
+  const values: string[] = [];
+  let index = startIndex;
+  for (; index < args.length; index += 1) {
+    if (stopFlags.includes(args[index])) {
+      break;
+    }
+    values.push(args[index]);
+  }
+
+  const text = values.join(" ").trim();
+  if (!text) {
+    throw new Error("Flag requires text.");
+  }
+
+  return { text, nextIndex: index };
 }
 
 function parsePlanArgs(args: string[], currentMissionId: string | undefined): { missionId: string; useModel: boolean } {
@@ -458,68 +654,34 @@ function parseJsonInput(value: string): unknown {
   }
 }
 
-function tokenize(value: string): string[] {
-  const tokens: string[] = [];
-  let current = "";
-  let quote: "'" | '"' | undefined;
-  let escaping = false;
-
-  for (const character of value) {
-    if (quote) {
-      if (character === quote) {
-        quote = undefined;
-      } else {
-        current += character;
-      }
-      continue;
-    }
-
-    if (escaping) {
-      current += character;
-      escaping = false;
-      continue;
-    }
-
-    if (character === "\\") {
-      escaping = true;
-      continue;
-    }
-
-    if (character === '"' || character === "'") {
-      quote = character;
-      continue;
-    }
-
-    if (/\s/.test(character)) {
-      if (current.length > 0) {
-        tokens.push(current);
-        current = "";
-      }
-      continue;
-    }
-
-    current += character;
+function handleModeCommand(args: string[], context: SlashCommandContext): SlashCommandResult {
+  const { renderer, session } = context;
+  if (args.length === 0) {
+    renderer.info(`Cockpit mode: ${session.cockpitMode} (plan | ask). Usage: /mode plan | /mode ask`);
+    return stay(context.currentMissionId);
   }
 
-  if (escaping) {
-    current += "\\";
+  const value = args[0].toLowerCase();
+  if (isCockpitMode(value)) {
+    session.cockpitMode = value;
+    renderer.info(`Cockpit mode set to: ${value}`);
+    return stay(context.currentMissionId);
   }
 
-  if (quote) {
-    throw new Error(`Unclosed ${quote} quote in slash command.`);
-  }
-
-  if (current.length > 0) {
-    tokens.push(current);
-  }
-
-  return tokens;
+  renderer.warn(`Unknown mode "${args[0]}". Use /mode plan or /mode ask.`);
+  return stay(context.currentMissionId);
 }
 
-function stay(output: string, currentMissionId: string | undefined): SlashCommandResult {
+function stay(currentMissionId: string | undefined): SlashCommandResult {
   return {
     exit: false,
-    output,
+    currentMissionId
+  };
+}
+
+function exit(currentMissionId: string | undefined): SlashCommandResult {
+  return {
+    exit: true,
     currentMissionId
   };
 }

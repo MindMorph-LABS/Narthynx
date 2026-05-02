@@ -59,4 +59,9 @@ export interface CreateMissionInput {
   goal: string;
   title?: string;
   successCriteria?: string[];
+  riskProfile?: {
+    level: RiskLevel;
+    reasons: string[];
+  };
+  templateName?: string;
 }
