@@ -1,4 +1,4 @@
-import { createDeterministicPlanGraph } from "../../missions/graph";
+import { createDeterministicPlanGraph, planGraphSchema, type PlanGraph } from "../../missions/graph";
 import type { Mission } from "../../missions/schema";
 import type { ModelCallRequest, ModelCallResponse, ModelProvider } from "../model-provider";
 
@@ -43,6 +43,26 @@ function renderStubContent(request: ModelCallRequest): string {
     return renderCompanionStubContent(request.input);
   }
 
+  if (request.task === "subagent_planner") {
+    return renderSubagentPlannerStub(request.input);
+  }
+
+  if (request.task === "subagent_safety") {
+    return JSON.stringify({
+      blocked: false,
+      severity: "medium",
+      reasons: ["Stub safety review agrees with heuristic snapshot only."],
+      heuristicNote: "stub_subagent_safety"
+    });
+  }
+
+  if (request.task === "subagent_verifier") {
+    return JSON.stringify({
+      stub: true,
+      message: "Verifier subagent uses deterministic gates; LM summary is optional and unused in MVP."
+    });
+  }
+
   if (request.task === "planning") {
     const input = request.input as Partial<StubPlanningInput>;
     if (input.mission?.id && input.mission.title && input.mission.goal && input.mission.successCriteria) {
@@ -72,6 +92,58 @@ function renderStubContent(request: ModelCallRequest): string {
     provider: "stub",
     task: request.task,
     message: "Deterministic stub response. No model provider or network call was used."
+  });
+}
+
+function renderSubagentPlannerStub(input: unknown): string {
+  const env = typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
+  const baseline = env.baselineGraph;
+  const parsedBaseline = baseline ? planGraphSchema.safeParse(baseline) : undefined;
+  let proposedGraph: PlanGraph | undefined = parsedBaseline?.success ? parsedBaseline.data : undefined;
+
+  let rationale =
+    parsedBaseline?.success === true
+      ? "Stub planner: echoes validated baseline PlanGraph (no edits)."
+      : "Stub planner baseline missing or invalid; derived graph from mission envelope.";
+
+  if (!proposedGraph) {
+    const m = env.mission as Partial<Mission> | undefined;
+    if (m?.id && m.title && m.goal && m.successCriteria) {
+      const missionSkeleton = {
+        id: m.id,
+        title: m.title,
+        goal: m.goal,
+        successCriteria: m.successCriteria,
+        context: { notes: [], files: [] },
+        planGraph: { nodes: [], edges: [] },
+        state: "created",
+        riskProfile: { level: "low", reasons: ["Initial mission has no actions yet."] },
+        checkpoints: [],
+        approvals: [],
+        artifacts: [],
+        ledger: [],
+        createdAt: new Date(0).toISOString(),
+        updatedAt: new Date(0).toISOString()
+      } satisfies Mission;
+
+      proposedGraph = createDeterministicPlanGraph(missionSkeleton);
+      rationale =
+        parsedBaseline?.success === false
+          ? "Stub planner baseline failed schema; returned deterministic MVP graph seed."
+          : rationale;
+    }
+  }
+
+  if (!proposedGraph) {
+    return JSON.stringify({
+      rationale: "Stub planner missing mission envelope; downstream should use local baseline fallback.",
+      proposedGraph: undefined
+    });
+  }
+
+  return JSON.stringify({
+    rationale,
+    proposedGraph
   });
 }
 

@@ -12,6 +12,7 @@ Roadmap **phase numbers** 16–18 below describe **connector** deliverables (bro
 | ----- | ---- | ----------- |
 | **Frontier F16** | [`docs/daemon.md`](daemon.md), appendix | Always-on localhost daemon (queue, events, schedules) |
 | **Frontier F17** | [`docs/companion.md`](companion.md) | Companion Mode (chat, memory proposals, mission handoff, reminders) |
+| **Frontier F20** | [`docs/subagents.md`](subagents.md) | Bounded expert subagents (verifier/planner/safety/critic sessions) |
 | **Connector C16** | Phase 16 below, [`docs/connectors.md`](connectors.md) | Browser (Playwright) connector |
 | **Connector C17** | Phase 17 below | MCP connector |
 | **Connector C18** | Phase 18 below | GitHub REST connector |
@@ -42,6 +43,7 @@ Roadmap **phase numbers** 16–18 below describe **connector** deliverables (bro
 - Phase 18 (GitHub connector): Partial — REST `github.*` tools, `github.yaml`, policy + spillover artifacts; GitHub Apps and GraphQL are future work
 - **Frontier F16 (daemon):** Implemented — local process + lockfile, localhost API (`docs/daemon.md`), JSONL queue/events, schedules, CLI + slash commands; optional trigger → queue follow-up jobs
 - **Frontier F17 (companion):** Implemented — policy `companion_mode`, JSONL companion store, `companion_chat` router task with strict JSON, interactive + `narthynx chat`, `/briefing` / `/remind` / `/mission-from-chat`, governed memory proposals, daemon reminder tick (`docs/companion.md`)
+- **Frontier F20 (bounded subagents):** Implemented — optional `.narthynx/subagents.yaml`, orchestrated sessions (`subagent_*` router tasks), tool-gated execution through `createToolRunner`, ledger `subagent.*` events; no swarm/multi-hop research companion — see [`docs/subagents.md`](subagents.md)
 
 ## Phases
 
@@ -71,6 +73,7 @@ Roadmap **phase numbers** 16–18 below describe **connector** deliverables (bro
 | 18 | GitHub connector (REST) | Partial | Typed `github.*` tools, `.narthynx/github.yaml`, PAT via env, repo allowlists, spillover `github_api_response` artifacts |
 | 16+ | Post-MVP SOTA Extensions | Post-MVP only | Deeper email/calendar, GitHub App + GraphQL, advanced browser/MCP transports (session reuse, CDP, remote MCP), and other connectors after runtime hardening |
 | F17 | Frontier Companion | Complete | Conversational surface + approval-gated memory + mission handoff + daemon reminders (`docs/companion.md`) |
+| F20 | Frontier Bounded Subagents | Complete | Verifier/planner/safety/critic hats, YAML profiles, ledger `subagent.*`, CLI + slash (`docs/subagents.md`) |
 
 ## MVP Success Definition
 

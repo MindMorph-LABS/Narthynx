@@ -8,7 +8,11 @@ export const modelTaskSchema = z.enum([
   "risk_classification",
   "final_report",
   /** Frontier F17 — conversational companion; JSON-only structured output */
-  "companion_chat"
+  "companion_chat",
+  /** Frontier F20 — bounded subagents (stub-friendly routing keys) */
+  "subagent_planner",
+  "subagent_verifier",
+  "subagent_safety"
 ]);
 
 export const modelUsageSchema = z.object({

@@ -47,3 +47,7 @@ export function createMemoryProposalId(): string {
 export function createMemoryConflictId(): string {
   return `mcf_${randomUUID()}`;
 }
+
+export function createSubagentSessionId(): string {
+  return `sag_${randomUUID()}`;
+}
