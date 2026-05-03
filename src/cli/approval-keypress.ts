@@ -29,15 +29,15 @@ export function readApprovalKeyChoice(input: Readable): Promise<ApprovalKeyChoic
 
   return new Promise((resolve) => {
     let finished = false;
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const timeoutRef: { id?: ReturnType<typeof setTimeout> } = {};
 
     const finish = (choice: ApprovalKeyChoice): void => {
       if (finished) {
         return;
       }
       finished = true;
-      if (timeoutId !== undefined) {
-        clearTimeout(timeoutId);
+      if (timeoutRef.id !== undefined) {
+        clearTimeout(timeoutRef.id);
       }
       restoreRawMode(stdin, previousRaw);
       stdin.removeListener("keypress", onKeypress);
@@ -96,6 +96,6 @@ export function readApprovalKeyChoice(input: Readable): Promise<ApprovalKeyChoic
 
     stdin.on("keypress", onKeypress);
 
-    timeoutId = setTimeout(() => finish(null), APPROVAL_KEYPRESS_TIMEOUT_MS);
+    timeoutRef.id = setTimeout(() => finish(null), APPROVAL_KEYPRESS_TIMEOUT_MS);
   });
 }
