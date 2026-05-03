@@ -57,6 +57,8 @@ Vite proxies `/api` to `http://127.0.0.1:17890` (the cockpit server must be runn
 
 Production assets are emitted to `dist/cockpit` by `pnpm build:cockpit`, which runs as part of `pnpm build` after the CLI bundle is built.
 
+See [`docs/mission-graph-ui.md`](mission-graph-ui.md) for frontier, edge-highlight, and layout persistence semantics.
+
 ## API overview
 
 All routes are under `/api` and require the Bearer token unless noted.
@@ -66,7 +68,8 @@ All routes are under `/api` and require the Bearer token unless noted.
 | GET | `/api/health` | Workspace doctor summary |
 | GET | `/api/missions` | List missions |
 | GET | `/api/missions/:missionId` | Mission detail |
-| GET | `/api/missions/:missionId/graph` | Plan graph DTO for the graph view (+ `raw`) |
+| GET | `/api/missions/:missionId/graph` | Plan graph **view DTO**: Dagre layout, execution `overlay` (frontier + per-node ledger hints), `smoothstep` edges with `highlighted`; includes `missionState` and `raw` plan graph |
+| PATCH | `/api/missions/:missionId/graph/view` | Body: `{ positions: Record<nodeId, { x, y }> }` merges into `graph-view.json` (view-only layout); unknown node ids ignored |
 | GET | `/api/missions/:missionId/ledger` | Ledger events (`limit` query) |
 | GET | `/api/missions/:missionId/replay` | Replay payload |
 | GET | `/api/missions/:missionId/report` | Report markdown |

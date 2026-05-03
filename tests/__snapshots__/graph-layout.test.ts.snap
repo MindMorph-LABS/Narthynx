@@ -1,0 +1,30 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`graph layout (dagre) > produces stable rounded positions for the deterministic MVP graph 1`] = `
+{
+  "n_001_understand_goal": {
+    "x": 32,
+    "y": 32,
+  },
+  "n_002_inspect_workspace": {
+    "x": 32,
+    "y": 200,
+  },
+  "n_003_gather_context": {
+    "x": 32,
+    "y": 368,
+  },
+  "n_004_propose_artifact_or_action": {
+    "x": 32,
+    "y": 536,
+  },
+  "n_005_request_approval": {
+    "x": 32,
+    "y": 704,
+  },
+  "n_006_generate_report": {
+    "x": 32,
+    "y": 872,
+  },
+}
+`;

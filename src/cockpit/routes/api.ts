@@ -10,7 +10,7 @@ import { createReportService } from "../../missions/reports";
 import { reportArtifactPath } from "../../missions/artifacts";
 import { createToolRegistry } from "../../tools/registry";
 import { createToolRunner } from "../../tools/runner";
-import { planGraphToFlowDto } from "../graph-dto";
+import { buildMissionGraphViewDto } from "../graph-dto";
 import { Hono } from "hono";
 
 const missionIdParam = z.string().regex(/^m_[a-z0-9_-]+$/);
@@ -90,11 +90,47 @@ export function createCockpitApiRouter(cwd: string): Hono {
     }
 
     try {
+      const mission = await missionStore.readMission(parsed.data);
       const graph = await missionStore.readMissionPlanGraph(parsed.data);
-      return c.json({ graph: planGraphToFlowDto(graph), raw: graph });
+      const ledger = await missionStore.readMissionLedger(parsed.data, { allowMissing: true });
+      const savedView = await missionStore.readGraphView(parsed.data);
+      const graphDto = buildMissionGraphViewDto(graph, ledger, {
+        savedPositions: savedView?.positions ?? null
+      });
+      return c.json({
+        graph: graphDto,
+        raw: graph,
+        missionState: mission.state
+      });
     } catch (e) {
       const message = e instanceof Error ? e.message : "Graph not found";
       return c.json(jsonError(message, "graph_not_found"), 404);
+    }
+  });
+
+  const graphViewPatchSchema = z.object({
+    positions: z.record(z.string(), z.object({ x: z.number(), y: z.number() }))
+  });
+
+  app.patch("/missions/:missionId/graph/view", async (c) => {
+    const parsed = missionIdParam.safeParse(c.req.param("missionId"));
+    if (!parsed.success) {
+      return c.json(jsonError("Invalid mission id", "invalid_mission_id"), 400);
+    }
+
+    let body: z.infer<typeof graphViewPatchSchema>;
+    try {
+      body = graphViewPatchSchema.parse(await c.req.json());
+    } catch {
+      return c.json(jsonError("Invalid JSON body", "invalid_body"), 400);
+    }
+
+    try {
+      const view = await missionStore.mergeGraphViewPositions(parsed.data, body.positions);
+      return c.json({ view });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Failed to save graph view";
+      return c.json(jsonError(message, "graph_view_failed"), 400);
     }
   });
 

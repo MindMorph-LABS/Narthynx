@@ -79,6 +79,49 @@ describe("Mission Cockpit HTTP API", () => {
     expect(pendingAfterJson.approvals.every((a) => a.id !== approval.id)).toBe(true);
   });
 
+  it("returns graph DTO with overlay, missionState, and smoothstep edges", async () => {
+    const cwd = await tempWorkspace();
+    await initWorkspace(cwd);
+    const missionStore = createMissionStore(cwd);
+    const mission = await missionStore.createMission({ goal: "Graph API shape" });
+    const app = await cockpitAppForWorkspace(cwd);
+
+    const res = await app.request(`http://localhost/api/missions/${mission.id}/graph`, { headers: authHeaders() });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      graph: {
+        nodes: Array<{ id: string; data: { emphasis: boolean } }>;
+        edges: Array<{ highlighted: boolean; edgeType: string }>;
+        overlay: { frontierNodeIds: string[]; byNodeId: Record<string, unknown> };
+      };
+      missionState: string;
+      raw: { nodes: unknown[] };
+    };
+    expect(body.missionState).toBe("created");
+    expect(body.graph.nodes.length).toBeGreaterThan(0);
+    expect(body.graph.overlay.frontierNodeIds.length).toBeGreaterThan(0);
+    expect(body.graph.edges.every((e) => e.edgeType === "smoothstep")).toBe(true);
+  });
+
+  it("PATCH /graph/view merges positions into graph-view.json", async () => {
+    const cwd = await tempWorkspace();
+    await initWorkspace(cwd);
+    const missionStore = createMissionStore(cwd);
+    const mission = await missionStore.createMission({ goal: "PATCH graph view" });
+    const graph = await missionStore.readMissionPlanGraph(mission.id);
+    const nodeId = graph.nodes[0].id;
+
+    const app = await cockpitAppForWorkspace(cwd);
+    const res = await app.request(`http://localhost/api/missions/${mission.id}/graph/view`, {
+      method: "PATCH",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ positions: { [nodeId]: { x: 42, y: 84 } } })
+    });
+    expect(res.status).toBe(200);
+    const view = await missionStore.readGraphView(mission.id);
+    expect(view?.positions[nodeId]).toEqual({ x: 42, y: 84 });
+  });
+
   it("records tool.denied on deny via API (CLI parity)", async () => {
     const cwd = await tempWorkspace();
     await initWorkspace(cwd);

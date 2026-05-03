@@ -14,6 +14,7 @@ import {
   type MissionNodeStatus,
   type PlanGraph
 } from "./graph";
+import { graphViewFilePath, graphViewFileSchema, type GraphViewFile } from "./graph-view-persist";
 import { appendLedgerEvent, ledgerFilePath, readLedgerEvents, type LedgerEvent } from "./ledger";
 import { missionSchema, type CreateMissionInput, type Mission, type MissionState } from "./schema";
 import { assertMissionStateTransition } from "./state-machine";
@@ -34,6 +35,8 @@ export interface MissionStore {
     details?: { summary?: string; provider?: string; model?: string }
   ): Promise<PlanGraph>;
   updateMissionPlanNodeStatus(id: string, nodeId: string, status: MissionNodeStatus): Promise<PlanGraph>;
+  readGraphView(id: string): Promise<GraphViewFile | null>;
+  mergeGraphViewPositions(id: string, positions: Record<string, { x: number; y: number }>): Promise<GraphViewFile>;
 }
 
 export function createMissionStore(cwd = process.cwd()): MissionStore {
@@ -265,6 +268,44 @@ export function createMissionStore(cwd = process.cwd()): MissionStore {
       await writeMissionFile(missionDir, updated);
 
       return parsedGraph;
+    },
+
+    async readGraphView(id) {
+      await this.readMission(id);
+      const missionDir = missionDirectory(paths.missionsDir, id);
+      const fp = graphViewFilePath(missionDir);
+      try {
+        const raw = await readFile(fp, "utf8");
+        const parsed = JSON.parse(raw) as unknown;
+        return graphViewFileSchema.parse(parsed);
+      } catch (error) {
+        const code = error instanceof Error && "code" in error ? String(error.code) : "";
+        if (code === "ENOENT") {
+          return null;
+        }
+        throw error;
+      }
+    },
+
+    async mergeGraphViewPositions(id, positions) {
+      await this.readMission(id);
+      const plan = await this.readMissionPlanGraph(id);
+      const valid = new Set(plan.nodes.map((n) => n.id));
+      const existing = await this.readGraphView(id);
+      const merged: Record<string, { x: number; y: number }> = { ...(existing?.positions ?? {}) };
+      for (const [nodeId, pos] of Object.entries(positions)) {
+        if (!valid.has(nodeId)) {
+          continue;
+        }
+        if (typeof pos?.x === "number" && typeof pos?.y === "number") {
+          merged[nodeId] = { x: pos.x, y: pos.y };
+        }
+      }
+      const file = graphViewFileSchema.parse({ version: 1, positions: merged });
+      const missionDir = missionDirectory(paths.missionsDir, id);
+      await mkdir(missionDir, { recursive: true });
+      await writeFile(graphViewFilePath(missionDir), `${JSON.stringify(file, null, 2)}\n`, "utf8");
+      return file;
     }
   };
 }
