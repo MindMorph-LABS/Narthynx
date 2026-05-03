@@ -47,3 +47,8 @@ export function createMemoryProposalId(): string {
 export function createMemoryConflictId(): string {
   return `mcf_${randomUUID()}`;
 }
+
+/** Frontier Phase 19 — persisted context compilation manifest artifact */
+export function createContextPacketId(): string {
+  return `cpkt_${randomUUID()}`;
+}

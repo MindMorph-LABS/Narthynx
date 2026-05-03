@@ -42,6 +42,7 @@ Roadmap **phase numbers** 16–18 below describe **connector** deliverables (bro
 - Phase 18 (GitHub connector): Partial — REST `github.*` tools, `github.yaml`, policy + spillover artifacts; GitHub Apps and GraphQL are future work
 - **Frontier F16 (daemon):** Implemented — local process + lockfile, localhost API (`docs/daemon.md`), JSONL queue/events, schedules, CLI + slash commands; optional trigger → queue follow-up jobs
 - **Frontier F17 (companion):** Implemented — policy `companion_mode`, JSONL companion store, `companion_chat` router task with strict JSON, interactive + `narthynx chat`, `/briefing` / `/remind` / `/mission-from-chat`, governed memory proposals, daemon reminder tick (`docs/companion.md`)
+- **Frontier F19 (context kernel):** Implemented — `src/context/*` compiler, ledger `context.packet_logged`, artifacts under `artifacts/context-packets/`, CLI `narthynx context diet|inspect`, slash `/context why|diet`; see [`docs/context-kernel.md`](context-kernel.md). Semantic relevance stays keyword-heuristic only; richer summarization is deferred.
 
 ## Phases
 
@@ -71,6 +72,7 @@ Roadmap **phase numbers** 16–18 below describe **connector** deliverables (bro
 | 18 | GitHub connector (REST) | Partial | Typed `github.*` tools, `.narthynx/github.yaml`, PAT via env, repo allowlists, spillover `github_api_response` artifacts |
 | 16+ | Post-MVP SOTA Extensions | Post-MVP only | Deeper email/calendar, GitHub App + GraphQL, advanced browser/MCP transports (session reuse, CDP, remote MCP), and other connectors after runtime hardening |
 | F17 | Frontier Companion | Complete | Conversational surface + approval-gated memory + mission handoff + daemon reminders (`docs/companion.md`) |
+| F19 | Frontier Context Kernel | Complete | Inspectable compiled context (`ContextPacket`), ledger + artifacts, diet/diff tooling; see [`docs/context-kernel.md`](context-kernel.md) |
 
 ## MVP Success Definition
 

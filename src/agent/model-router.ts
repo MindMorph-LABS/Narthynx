@@ -210,7 +210,15 @@ function resolveRoutingLegs(input: {
   return [{ kind: "env" }];
 }
 
-function extractPackSummary(input: unknown): { bytes?: number; estimatedTokens?: number; includedCount?: number } | undefined {
+function extractPackSummary(input: unknown):
+  | {
+      bytes?: number;
+      estimatedTokens?: number;
+      includedCount?: number;
+      contextPacketId?: string;
+      exclusionCounts?: Record<string, number>;
+    }
+  | undefined {
   if (!input || typeof input !== "object") {
     return undefined;
   }
@@ -219,13 +227,38 @@ function extractPackSummary(input: unknown): { bytes?: number; estimatedTokens?:
     return undefined;
   }
   const totals = pack.totals as Record<string, unknown> | undefined;
-  if (!totals || typeof totals !== "object") {
+  const base =
+    totals && typeof totals === "object"
+      ? {
+          bytes: typeof totals.bytes === "number" ? totals.bytes : undefined,
+          estimatedTokens: typeof totals.estimatedTokens === "number" ? totals.estimatedTokens : undefined,
+          includedCount: typeof totals.includedCount === "number" ? totals.includedCount : undefined
+        }
+      : {};
+
+  const contextPacketId = typeof pack.contextPacketId === "string" ? pack.contextPacketId : undefined;
+  const exclusionCountsRaw = pack.exclusionCounts;
+  let exclusionCounts: Record<string, number> | undefined;
+  if (exclusionCountsRaw && typeof exclusionCountsRaw === "object") {
+    exclusionCounts = {};
+    for (const [category, rawCount] of Object.entries(exclusionCountsRaw as Record<string, unknown>)) {
+      exclusionCounts[category] =
+        typeof rawCount === "number" && Number.isFinite(rawCount) ? Math.trunc(rawCount) : 0;
+    }
+  }
+
+  if (
+    Object.keys(base).length === 0 &&
+    contextPacketId === undefined &&
+    (exclusionCounts === undefined || Object.keys(exclusionCounts).length === 0)
+  ) {
     return undefined;
   }
+
   return {
-    bytes: typeof totals.bytes === "number" ? totals.bytes : undefined,
-    estimatedTokens: typeof totals.estimatedTokens === "number" ? totals.estimatedTokens : undefined,
-    includedCount: typeof totals.includedCount === "number" ? totals.includedCount : undefined
+    ...base,
+    ...(contextPacketId !== undefined ? { contextPacketId } : {}),
+    ...(exclusionCounts !== undefined ? { exclusionCounts } : {})
   };
 }
 
@@ -237,7 +270,13 @@ async function ensureSensitiveCloudConsent(input: {
   sensitiveContextIncluded: boolean;
   provider: ModelProvider;
   policy: WorkspacePolicy;
-  packSummary?: { bytes?: number; estimatedTokens?: number; includedCount?: number };
+  packSummary?: {
+    bytes?: number;
+    estimatedTokens?: number;
+    includedCount?: number;
+    contextPacketId?: string;
+    exclusionCounts?: Record<string, number>;
+  };
   sensitiveContextPolicyOverride: WorkspacePolicy["cloud_model_sensitive_context"];
 }): Promise<{ verified: boolean; approvalId?: string }> {
   if (!input.provider.isNetworked || !input.sensitiveContextIncluded) {

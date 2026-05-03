@@ -69,7 +69,7 @@ Implemented:
 - Stub-first model provider abstraction with optional OpenAI-compatible routing.
 - Bounded mission executor vertical slice with read-only steps, approval pause/resume, final reports, and replay.
 - Open-source polish docs, examples, templates, and release checklist.
-- Phase 15 Mission Kit: templates, context diet (`context.md` / `context.json`), and local proof cards.
+- Phase 15 Mission Kit plus **Frontier F19 context kernel**: templates, inspectable compiled context packets (`artifacts/context-packets/`, ledger `context.packet_logged`; see `docs/context-kernel.md`).
 - **Phase 15d:** encrypted per-mission vault (`narthynx vault`, `vault.read`, policy `vault`) — see [`docs/vault.md`](docs/vault.md).
 
 Narthynx intentionally fails honestly for behavior outside the current runtime. It does not pretend later-phase integrations exist.

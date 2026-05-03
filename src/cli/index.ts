@@ -9,7 +9,6 @@ import { Command, CommanderError } from "commander";
 import { createCostService } from "../agent/cost";
 import { createMissionExecutor } from "../agent/executor";
 import { createModelPlanner } from "../agent/model-planner";
-import { loadContextDietConfig } from "../config/context-diet-config";
 import { loadMcpConfig } from "../config/mcp-config";
 import { loadWorkspacePolicy } from "../config/load";
 import { resolveWorkspaceActor } from "../config/identity-config";
@@ -17,6 +16,7 @@ import { doctorWorkspace, initWorkspace, resolveWorkspacePaths } from "../config
 import { runCockpitServer, resolveCockpitPort } from "../cockpit/serve";
 import { runInteractiveSession } from "./interactive";
 import { attachVaultCommands } from "./vault-cmd";
+import { attachContextCommands } from "./context-cmd";
 import { attachMemoryCommands } from "./memory-cmd";
 import { runStandaloneCompanionCli } from "./companion-cli";
 import { createApprovalStore } from "../missions/approvals";
@@ -24,8 +24,6 @@ import { createCheckpointStore } from "../missions/checkpoints";
 import { createReplayService } from "../missions/replay";
 import { createReportService } from "../missions/reports";
 import { createMissionStore, missionFilePath } from "../missions/store";
-import { createMissionContextService } from "../missions/context";
-import { buildModelContextPack, pruneStaleContextEntries } from "../missions/context-diet";
 import { createProofCardService } from "../missions/proof-card";
 import { createMissionInputFromTemplate, listMissionTemplates } from "../missions/templates";
 import { ingestTriggerEvent, replayTriggerByEventId, formatTriggersDoctorMessage } from "../triggers/engine";
@@ -156,7 +154,6 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
   const checkpointStore = createCheckpointStore(cwd);
   const reportService = createReportService(cwd);
   const replayService = createReplayService(cwd);
-  const contextService = createMissionContextService(cwd);
   const proofCardService = createProofCardService(cwd);
   const costService = createCostService(cwd);
   const modelPlanner = createModelPlanner(cwd, { approvalStore });
@@ -244,6 +241,7 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
 
   attachVaultCommands(program, cwd, io);
   attachMemoryCommands(program, cwd, io);
+  attachContextCommands(program, cwd, io);
 
   const mcpProgram = program.command("mcp").description("MCP connector helpers (stdio servers).");
 
@@ -528,99 +526,6 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
         writeCliError(io, error);
       }
     });
-
-  program
-    .command("context")
-    .description("Show or update mission context diet metadata. (Phase 15)")
-    .argument("<mission-id>", "Mission ID")
-    .option("--note <text>", "Append a mission context note")
-    .option("--file <path>", "Attach a safe local file to mission context")
-    .option("--reason <text>", "Reason for attaching a file")
-    .option("--pack", "Print model context pack summary (caps, truncation)")
-    .option("--json", "With --pack, output JSON")
-    .option("--prune-stale", "Remove stale file entries from context index (files only)")
-    .action(
-      async (
-        missionId: string,
-        commandOptions: {
-          note?: string;
-          file?: string;
-          reason?: string;
-          pack?: boolean;
-          json?: boolean;
-          pruneStale?: boolean;
-        }
-      ) => {
-        try {
-          const paths = resolveWorkspacePaths(cwd);
-          if (commandOptions.pruneStale) {
-            const n = await pruneStaleContextEntries(missionId, cwd);
-            io.writeOut(`Pruned ${n} stale file context entr(y/ies).\n`);
-          }
-
-          if (commandOptions.note && commandOptions.file) {
-            throw new Error("Use either --note or --file, not both.");
-          }
-
-          if (commandOptions.note) {
-            await contextService.addNote(missionId, commandOptions.note);
-            io.writeOut(`Context note added: ${missionId}\n`);
-            io.writeOut(`${await contextService.renderContextSummary(missionId)}\n`);
-            return;
-          }
-
-          if (commandOptions.file) {
-            if (!commandOptions.reason) {
-              throw new Error("--reason is required with --file.");
-            }
-            await contextService.addFile(missionId, commandOptions.file, commandOptions.reason);
-            io.writeOut(`Context file attached: ${commandOptions.file}\n`);
-            io.writeOut(`${await contextService.renderContextSummary(missionId)}\n`);
-            return;
-          }
-
-          if (commandOptions.pack) {
-            const diet = await loadContextDietConfig(paths.contextDietFile);
-            if (!diet.ok) {
-              throw new Error(`context-diet.yaml invalid: ${diet.message}`);
-            }
-            const pack = await buildModelContextPack(missionId, cwd);
-            if (commandOptions.json) {
-              io.writeOut(
-                JSON.stringify(
-                  {
-                    totals: pack.totals,
-                    sensitiveContextIncluded: pack.sensitiveContextIncluded,
-                    entries: pack.entries,
-                    diet: diet.value
-                  },
-                  null,
-                  2
-                )
-              );
-              io.writeOut("\n");
-              return;
-            }
-            io.writeOut(`Model context pack for ${missionId}\n`);
-            io.writeOut(
-              `Budget: ${pack.totals.bytes}/${diet.value.pack_max_bytes} bytes (est. tokens ${pack.totals.estimatedTokens}`
-            );
-            if (diet.value.pack_max_estimated_tokens !== undefined) {
-              io.writeOut(` / ${diet.value.pack_max_estimated_tokens} cap`);
-            }
-            io.writeOut(")\n");
-            io.writeOut(`Included: ${pack.totals.includedCount}, omitted: ${pack.totals.omittedCount}\n`);
-            io.writeOut(`Sensitive context in pack: ${pack.sensitiveContextIncluded}\n\n`);
-            io.writeOut(pack.packText ? `${pack.packText}\n` : "(empty pack)\n");
-            return;
-          }
-
-          io.writeOut(`${await contextService.renderContextSummary(missionId)}\n`);
-        } catch (error) {
-          writeCliError(io, error);
-        }
-      }
-    );
 
   program
     .command("run")

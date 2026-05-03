@@ -16,7 +16,11 @@ export const contextDietConfigSchema = z.object({
   pack_max_estimated_tokens: z.number().int().min(512).max(2_000_000).optional(),
   file_truncation: fileTruncationSchema.default({}),
   stale_policy: z.enum(["warn", "omit_from_pack"]).default("warn"),
-  include_workspace_notes: z.boolean().default(false)
+  include_workspace_notes: z.boolean().default(false),
+  /** Prefer git diff snippets for tracked files (`full` = always read file body). */
+  file_context_mode: z.enum(["full", "diff", "auto"]).default("auto"),
+  /** Max chars for git diff body before truncation (distinct from byte diet caps). */
+  git_diff_max_chars: z.number().int().min(2_048).max(2_000_000).default(48_000)
 });
 
 export type ContextDietConfig = z.infer<typeof contextDietConfigSchema>;
