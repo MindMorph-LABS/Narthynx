@@ -1,18 +1,15 @@
-import { z } from "zod";
-
 import { loadWorkspacePolicy } from "../config/load";
 import type { WorkspacePaths } from "../config/workspace";
 import { appendMemoryProposal, approveMemoryProposal, listPendingProposals, rejectMemoryProposal } from "./proposals";
 import type { MemoryProposalStored } from "./schema";
 
-const pendingMemorySchema = z.object({
-  id: z.string(),
-  ts: z.string(),
-  text: z.string(),
-  sessionId: z.string().optional(),
-  status: z.enum(["pending", "approved", "rejected"])
-});
-export type PendingMemoryProposal = z.infer<typeof pendingMemorySchema>;
+export type PendingMemoryProposal = {
+  id: string;
+  ts: string;
+  text: string;
+  sessionId?: string;
+  status: "pending" | "approved" | "rejected";
+};
 
 async function requirePolicy(paths: WorkspacePaths) {
   const r = await loadWorkspacePolicy(paths.policyFile);

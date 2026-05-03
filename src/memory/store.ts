@@ -1,4 +1,4 @@
-import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile } from "node:fs/promises";
 
 import type { WorkspacePaths } from "../config/workspace";
 import type { WorkspacePolicy } from "../config/load";
