@@ -47,6 +47,9 @@ describe("tool registry", () => {
       "git.diff",
       "git.log",
       "git.status",
+      "mcp.servers.list",
+      "mcp.tools.call",
+      "mcp.tools.list",
       "report.write",
       "shell.run"
     ]);
@@ -61,6 +64,9 @@ describe("tool registry", () => {
     );
     expect(tools.map((tool) => `${tool.name}:${tool.sideEffect}:${tool.riskLevel}:${tool.requiresApproval}`)).toContain(
       "shell.run:shell:high:true"
+    );
+    expect(tools.map((tool) => `${tool.name}:${tool.sideEffect}:${tool.riskLevel}:${tool.requiresApproval}`)).toContain(
+      "mcp.tools.call:external_comm:high:true"
     );
   });
 

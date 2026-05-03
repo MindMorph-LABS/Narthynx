@@ -24,7 +24,8 @@ export const artifactSchema = z.object({
     "git_log",
     "proof_card",
     "browser_screenshot",
-    "browser_snapshot"
+    "browser_snapshot",
+    "mcp_tool_output"
   ]),
   path: z.string().min(1),
   title: z.string().min(1),

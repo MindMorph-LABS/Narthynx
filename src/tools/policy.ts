@@ -20,7 +20,19 @@ export type ToolPolicyDecision =
       riskLevel: RiskLevel;
     };
 
-export function classifyToolPolicy(tool: ToolAction<unknown, unknown>, policy: WorkspacePolicy): ToolPolicyDecision {
+function extractMcpServerId(toolInput: unknown): string | undefined {
+  if (typeof toolInput === "object" && toolInput !== null && "serverId" in toolInput) {
+    const v = (toolInput as { serverId: unknown }).serverId;
+    return typeof v === "string" ? v : undefined;
+  }
+  return undefined;
+}
+
+export function classifyToolPolicy(
+  tool: ToolAction<unknown, unknown>,
+  policy: WorkspacePolicy,
+  toolInput?: unknown
+): ToolPolicyDecision {
   if (isBrowserToolName(tool.name)) {
     if (policy.browser === "block") {
       return block(tool, "Browser tools are blocked by policy (browser: block).");
@@ -30,6 +42,21 @@ export function classifyToolPolicy(tool: ToolAction<unknown, unknown>, policy: W
         tool,
         "Browser tools require at least one entry in browser_hosts_allow when browser is ask."
       );
+    }
+  }
+
+  if (tool.name.startsWith("mcp.")) {
+    if (policy.mcp === "block") {
+      return block(tool, "MCP is blocked by policy (mcp: block).");
+    }
+    if (policy.mcp_servers_allow !== undefined && tool.name !== "mcp.servers.list") {
+      const sid = extractMcpServerId(toolInput);
+      if (!sid) {
+        return block(tool, "MCP tool requires serverId for mcp_servers_allow policy check.");
+      }
+      if (!policy.mcp_servers_allow.includes(sid)) {
+        return block(tool, `MCP server ${sid} is not listed in mcp_servers_allow.`);
+      }
     }
   }
 

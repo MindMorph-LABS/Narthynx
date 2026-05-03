@@ -6,12 +6,16 @@ import { promisify } from "node:util";
 import { z } from "zod";
 
 import { loadWorkspacePolicy } from "../config/load";
+import { findMcpServer, loadMcpConfig } from "../config/mcp-config";
 import { resolveWorkspacePaths } from "../config/workspace";
 import { createArtifactStore, reportArtifactPath, writeOutputArtifact } from "../missions/artifacts";
 import { missionDirectory } from "../missions/store";
 import { browserTools } from "./browser";
 import { classifyCommandSafety, resolveWorkspaceCommandCwd } from "./command-safety";
 import { resolveGuardedWorkspacePath } from "./path-guard";
+import { cacheEntryFresh, readMcpToolsCache, writeMcpToolsCache } from "./mcp-cache";
+import { isMcpServerPolicyAllowed, mcpArgumentsFingerprint } from "./mcp-guard";
+import { mcpCallTool, mcpListTools, mcpResultByteLength, truncateMcpResultForInline } from "./mcp-session";
 import type { ToolAction } from "./types";
 
 const execFileAsync = promisify(execFile);
@@ -100,7 +104,67 @@ const reportWriteInputSchema = z.object({
 });
 
 const reportWriteOutputSchema = z.object({
-  path: z.string()
+  path: z.string(),
+  bytesWritten: z.number().int().nonnegative()
+});
+
+const mcpServersListInputSchema = z.object({});
+const mcpServersListOutputSchema = z.object({
+  servers: z.array(
+    z.object({
+      id: z.string(),
+      command: z.string(),
+      args: z.array(z.string()),
+      policyAllowed: z.boolean(),
+      toolsAllow: z.array(z.string()).optional(),
+      toolsDeny: z.array(z.string()),
+      timeoutMs: z.number().optional(),
+      maxOutputBytes: z.number().optional(),
+      cache: z
+        .object({
+          cachedAt: z.string(),
+          toolCount: z.number(),
+          fresh: z.boolean()
+        })
+        .optional()
+    })
+  )
+});
+
+const mcpToolsListInputSchema = z.object({
+  serverId: z.string().min(1),
+  refresh: z.boolean().default(false)
+});
+
+const mcpToolsListOutputSchema = z.object({
+  serverId: z.string(),
+  source: z.enum(["cache", "live"]),
+  tools: z.array(
+    z.object({
+      name: z.string(),
+      description: z.string().optional(),
+      inputSchema: z.unknown().optional()
+    })
+  ),
+  cachedAt: z.string().optional()
+});
+
+const mcpToolsCallInputSchema = z.object({
+  serverId: z.string().min(1),
+  name: z.string().min(1),
+  arguments: z.record(z.unknown()).default({})
+});
+
+const mcpToolsCallOutputSchema = z.object({
+  serverId: z.string(),
+  toolName: z.string(),
+  argumentsFingerprint: z.string(),
+  content: z.unknown(),
+  structuredContent: z.unknown().optional(),
+  isError: z.boolean().optional(),
+  artifactPath: z.string().optional(),
+  truncated: z.boolean(),
+  resultBytes: z.number().int()
 });
 
 export const builtinTools: ToolAction<unknown, unknown>[] = [
@@ -362,7 +426,175 @@ export const builtinTools: ToolAction<unknown, unknown>[] = [
       };
     }
   },
-  ...browserTools
+  ...browserTools,
+  {
+    name: "mcp.servers.list",
+    description: "List MCP servers from .narthynx/mcp.yaml and optional cached tool discovery metadata.",
+    inputSchema: mcpServersListInputSchema,
+    outputSchema: mcpServersListOutputSchema,
+    riskLevel: "low",
+    sideEffect: "local_read",
+    requiresApproval: false,
+    reversible: true,
+    async run(input, context) {
+      mcpServersListInputSchema.parse(input);
+      const paths = resolveWorkspacePaths(context.cwd);
+      const mcp = await loadMcpConfig(paths.mcpFile);
+      if (!mcp.ok) {
+        throw new Error(`mcp.yaml invalid: ${mcp.message}`);
+      }
+      const policy = await loadWorkspacePolicy(paths.policyFile);
+      if (!policy.ok) {
+        throw new Error(`policy.yaml invalid: ${policy.message}`);
+      }
+
+      const servers = [];
+      for (const s of mcp.value.servers) {
+        const cache = await readMcpToolsCache(paths.mcpCacheDir, s.id, Number.POSITIVE_INFINITY);
+        const fresh = cacheEntryFresh(cache, 5 * 60 * 1_000);
+        servers.push({
+          id: s.id,
+          command: s.command,
+          args: s.args,
+          policyAllowed: isMcpServerPolicyAllowed(policy.value, s.id),
+          toolsAllow: s.tools_allow,
+          toolsDeny: s.tools_deny,
+          timeoutMs: s.timeoutMs,
+          maxOutputBytes: s.maxOutputBytes,
+          cache: cache ? { cachedAt: cache.cachedAt, toolCount: cache.tools.length, fresh } : undefined
+        });
+      }
+
+      return { servers };
+    }
+  },
+  {
+    name: "mcp.tools.list",
+    description: "List tools from an MCP server (cached up to ~5 minutes unless refresh is true).",
+    inputSchema: mcpToolsListInputSchema,
+    outputSchema: mcpToolsListOutputSchema,
+    riskLevel: "medium",
+    sideEffect: "local_read",
+    requiresApproval: false,
+    reversible: true,
+    async run(input, context) {
+      const parsed = mcpToolsListInputSchema.parse(input);
+      const paths = resolveWorkspacePaths(context.cwd);
+      const mcp = await loadMcpConfig(paths.mcpFile);
+      if (!mcp.ok) {
+        throw new Error(`mcp.yaml invalid: ${mcp.message}`);
+      }
+      const server = findMcpServer(mcp.value, parsed.serverId);
+      if (!server) {
+        throw new Error(`Unknown MCP server id: ${parsed.serverId}`);
+      }
+
+      const timeoutMs = server.timeoutMs ?? 10_000;
+
+      if (!parsed.refresh) {
+        const cached = await readMcpToolsCache(paths.mcpCacheDir, parsed.serverId);
+        if (cached && cacheEntryFresh(cached, 5 * 60 * 1_000)) {
+          return {
+            serverId: parsed.serverId,
+            source: "cache" as const,
+            tools: cached.tools,
+            cachedAt: cached.cachedAt
+          };
+        }
+      }
+
+      const tools = await mcpListTools(server, paths.rootDir, timeoutMs);
+      const cachedAt = new Date().toISOString();
+      await writeMcpToolsCache(paths.mcpCacheDir, {
+        serverId: parsed.serverId,
+        cachedAt,
+        tools
+      });
+
+      return {
+        serverId: parsed.serverId,
+        source: "live" as const,
+        tools,
+        cachedAt
+      };
+    }
+  },
+  {
+    name: "mcp.tools.call",
+    description: "Call a tool on an MCP server (stdio). May write an artifact when output exceeds server maxOutputBytes.",
+    inputSchema: mcpToolsCallInputSchema,
+    outputSchema: mcpToolsCallOutputSchema,
+    riskLevel: "high",
+    sideEffect: "external_comm",
+    requiresApproval: true,
+    reversible: false,
+    async run(input, context) {
+      const parsed = mcpToolsCallInputSchema.parse(input);
+      const paths = resolveWorkspacePaths(context.cwd);
+      const mcp = await loadMcpConfig(paths.mcpFile);
+      if (!mcp.ok) {
+        throw new Error(`mcp.yaml invalid: ${mcp.message}`);
+      }
+      const server = findMcpServer(mcp.value, parsed.serverId);
+      if (!server) {
+        throw new Error(`Unknown MCP server id: ${parsed.serverId}`);
+      }
+
+      const timeoutMs = server.timeoutMs ?? 10_000;
+      const maxOut = server.maxOutputBytes ?? 500_000;
+      const fingerprint = mcpArgumentsFingerprint(parsed.arguments);
+
+      const raw = await mcpCallTool(server, paths.rootDir, timeoutMs, parsed.name, parsed.arguments);
+      const bytes = mcpResultByteLength(raw);
+      let artifactPath: string | undefined;
+      let truncated = false;
+      let content: unknown = raw.content;
+      let structuredContent: unknown = raw.structuredContent;
+
+      if (bytes > maxOut) {
+        const full = JSON.stringify(raw, null, 2);
+        const now = new Date().toISOString().replace(/[:.]/g, "-");
+        const safeName = `mcp-${parsed.serverId}-${parsed.name}-${now}.json`.replace(/[^a-zA-Z0-9_.-]/g, "_");
+        const written = await writeOutputArtifact(context.cwd, context.missionId, safeName, full);
+        await createArtifactStore(context.cwd).registerArtifact({
+          missionId: context.missionId,
+          type: "mcp_tool_output",
+          title: `MCP ${parsed.serverId}/${parsed.name} output`,
+          relativePath: written.relativePath,
+          metadata: {
+            serverId: parsed.serverId,
+            toolName: parsed.name,
+            bytes,
+            argumentsFingerprint: fingerprint
+          }
+        });
+        artifactPath = written.relativePath;
+        const preview = truncateMcpResultForInline(raw, 8_000);
+        content = typeof preview.inline === "string" ? preview.inline : preview.inline.content;
+        structuredContent = undefined;
+        truncated = true;
+      } else {
+        const preview = truncateMcpResultForInline(raw, 12_000);
+        if (preview.truncated) {
+          truncated = true;
+          content = preview.inline;
+          structuredContent = undefined;
+        }
+      }
+
+      return {
+        serverId: parsed.serverId,
+        toolName: parsed.name,
+        argumentsFingerprint: fingerprint,
+        content,
+        structuredContent,
+        isError: raw.isError,
+        artifactPath,
+        truncated,
+        resultBytes: bytes
+      };
+    }
+  }
 ];
 
 async function loadPolicyOrThrow(cwd: string) {

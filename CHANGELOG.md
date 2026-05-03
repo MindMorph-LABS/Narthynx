@@ -13,3 +13,4 @@
 - Add Phase 14 open-source polish: public docs, examples, GitHub templates, release checklist, and package metadata.
 - Add Phase 15 Mission Kit: templates, context diet (`context.md` / `context.json`), proof cards, and Phase 15.5 interactive terminal UX (NL-first shell, renderer abstraction, `/graph`, `/mode`, workspace notes, sensitive-path guard for `@`).
 - Add local web Mission Cockpit (`narthynx cockpit`): Hono API, Vite/React dashboard (missions, graph, ledger, replay, report, approvals), Bearer token auth, default loopback bind, optional LAN mode; see `docs/cockpit.md`.
+- Add MCP stdio connector: `.narthynx/mcp.yaml`, typed `mcp.servers.list` / `mcp.tools.list` / `mcp.tools.call`, policy keys (`mcp`, `mcp_servers_allow`), `@modelcontextprotocol/sdk` client, `narthynx mcp list`, doctor coherence checks, and `mcp_tool_output` artifacts for oversized results.

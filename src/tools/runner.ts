@@ -1,5 +1,6 @@
 import type { z } from "zod";
 
+import { loadMcpConfig } from "../config/mcp-config";
 import { loadWorkspacePolicy, type WorkspacePolicy } from "../config/load";
 import { resolveWorkspacePaths } from "../config/workspace";
 import { createApprovalStore } from "../missions/approvals";
@@ -8,6 +9,7 @@ import { appendLedgerEvent, ledgerFilePath } from "../missions/ledger";
 import { createMissionStore, missionDirectory } from "../missions/store";
 import { extractBrowserUrlsFromInput, isBrowserToolName, classifyBrowserInputSafety } from "./browser-guard";
 import { classifyShellRunInputSafety, shellRunApprovalTarget } from "./command-safety";
+import { classifyMcpInputSafety } from "./mcp-guard";
 import { classifyToolPolicy } from "./policy";
 import { createToolRegistry, type ToolRegistry } from "./registry";
 import type { ToolRunRequest, ToolRunResult } from "./types";
@@ -62,14 +64,14 @@ export function createToolRunner(options: ToolRunnerOptions = {}) {
         return { ok: false, toolName: tool.name, message, blocked: false };
       }
 
-      const inputSafety = classifyToolInputSafety(tool.name, input.data, paths.rootDir, policy.value);
+      const inputSafety = await classifyToolInputSafety(tool.name, input.data, paths.rootDir, policy.value);
       if (!inputSafety.ok) {
         const message = inputSafety.reason ?? `${tool.name} input is blocked by safety policy.`;
         await appendDenied(ledgerPath, request, message, "blocked");
         return { ok: false, toolName: tool.name, message, blocked: true };
       }
 
-      const decision = classifyToolPolicy(tool, policy.value);
+      const decision = classifyToolPolicy(tool, policy.value, input.data);
       if (decision.action === "block") {
         await appendDenied(ledgerPath, request, decision.reason, "blocked");
         return { ok: false, toolName: tool.name, message: decision.reason, blocked: true };
@@ -149,7 +151,7 @@ export function createToolRunner(options: ToolRunnerOptions = {}) {
         return { ok: false, toolName: tool.name, message, blocked: false, approvalId };
       }
 
-      const inputSafety = classifyToolInputSafety(tool.name, input.data, paths.rootDir, policyReload.value);
+      const inputSafety = await classifyToolInputSafety(tool.name, input.data, paths.rootDir, policyReload.value);
       if (!inputSafety.ok) {
         const message = inputSafety.reason ?? `${tool.name} input is blocked by safety policy.`;
         await appendFailed(ledgerPath, { missionId: approval.missionId, toolName: tool.name, input: approval.toolInput }, message, true);
@@ -290,12 +292,12 @@ function formatZodError(error: z.ZodError): string {
   return error.issues.map((issue) => `${issue.path.join(".") || "input"}: ${issue.message}`).join("; ");
 }
 
-function classifyToolInputSafety(
+async function classifyToolInputSafety(
   toolName: string,
   input: unknown,
   rootDir: string,
   policy: WorkspacePolicy
-): { ok: boolean; reason?: string } {
+): Promise<{ ok: boolean; reason?: string }> {
   if (toolName === "shell.run") {
     return classifyShellRunInputSafety(input, rootDir);
   }
@@ -303,6 +305,19 @@ function classifyToolInputSafety(
   if (isBrowserToolName(toolName)) {
     const r = classifyBrowserInputSafety(toolName, input, policy);
     return r.ok ? { ok: true } : { ok: false, reason: r.reason };
+  }
+
+  if (toolName.startsWith("mcp.")) {
+    const wsPaths = resolveWorkspacePaths(rootDir);
+    const mcpConfig = await loadMcpConfig(wsPaths.mcpFile);
+    if (!mcpConfig.ok) {
+      return { ok: false, reason: `mcp.yaml invalid: ${mcpConfig.message}` };
+    }
+    return classifyMcpInputSafety(toolName, input, {
+      rootDir: wsPaths.rootDir,
+      policy,
+      mcpConfig: mcpConfig.value
+    });
   }
 
   return { ok: true };
@@ -318,6 +333,21 @@ function approvalTargetForTool(toolName: string, input: unknown): string | undef
     return urls[0];
   }
 
+  if (toolName === "mcp.tools.call" && typeof input === "object" && input !== null && "serverId" in input && "name" in input) {
+    const sid = (input as { serverId?: unknown }).serverId;
+    const name = (input as { name?: unknown }).name;
+    if (typeof sid === "string" && typeof name === "string") {
+      return `mcp:${sid}:${name}`;
+    }
+  }
+
+  if (toolName === "mcp.tools.list" && typeof input === "object" && input !== null && "serverId" in input) {
+    const sid = (input as { serverId?: unknown }).serverId;
+    if (typeof sid === "string") {
+      return `mcp:${sid}:tools.list`;
+    }
+  }
+
   if (typeof input === "object" && input !== null && "path" in input) {
     const value = (input as { path?: unknown }).path;
     return typeof value === "string" ? value : undefined;
@@ -331,6 +361,8 @@ function isApprovalContinuationTool(toolName: string): boolean {
     toolName === "filesystem.write" ||
     toolName === "report.write" ||
     toolName === "shell.run" ||
+    toolName === "mcp.tools.list" ||
+    toolName === "mcp.tools.call" ||
     isBrowserToolName(toolName)
   );
 }

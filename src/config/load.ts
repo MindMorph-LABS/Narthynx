@@ -29,7 +29,10 @@ export const policySchema = z.object({
   /** Max time (ms) for navigation and Playwright defaults per action. */
   browser_max_navigation_ms: z.number().int().min(3_000).max(120_000).default(30_000),
   /** Bound for future multi-step session reuse (v2). */
-  browser_max_steps_per_session: z.number().int().min(1).max(100).default(50)
+  browser_max_steps_per_session: z.number().int().min(1).max(100).default(50),
+  mcp: z.enum(["block", "ask"]).default("block"),
+  mcp_servers_allow: z.array(z.string()).optional(),
+  mcp_max_concurrent_sessions: z.number().int().min(1).max(8).optional()
 });
 
 export type WorkspaceConfig = z.infer<typeof configSchema>;

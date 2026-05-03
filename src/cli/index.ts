@@ -9,6 +9,8 @@ import { Command, CommanderError } from "commander";
 import { createCostService } from "../agent/cost";
 import { createMissionExecutor } from "../agent/executor";
 import { createModelPlanner } from "../agent/model-planner";
+import { loadMcpConfig } from "../config/mcp-config";
+import { loadWorkspacePolicy } from "../config/load";
 import { doctorWorkspace, initWorkspace, resolveWorkspacePaths } from "../config/workspace";
 import { runCockpitServer, resolveCockpitPort } from "../cockpit/serve";
 import { runInteractiveSession } from "./interactive";
@@ -24,6 +26,8 @@ import { ingestTriggerEvent, replayTriggerByEventId, formatTriggersDoctorMessage
 import { loadTriggersConfig } from "../triggers/rules";
 import { readTriggerLogLines } from "../triggers/event-log";
 import { createToolRegistry } from "../tools/registry";
+import { cacheEntryFresh, readMcpToolsCache } from "../tools/mcp-cache";
+import { isMcpServerPolicyAllowed } from "../tools/mcp-guard";
 import { createToolRunner } from "../tools/runner";
 
 export const VERSION = "0.1.0";
@@ -217,6 +221,41 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
       }
 
       io.writeOut("Workspace is healthy.\n");
+    });
+
+  const mcpProgram = program.command("mcp").description("MCP connector helpers (stdio servers).");
+
+  mcpProgram
+    .command("list")
+    .description("List MCP servers from .narthynx/mcp.yaml and tool-list cache status.")
+    .action(async () => {
+      const paths = resolveWorkspacePaths(cwd);
+      const loaded = await loadMcpConfig(paths.mcpFile);
+      if (!loaded.ok) {
+        io.writeErr(`mcp.yaml invalid: ${loaded.message}\n`);
+        process.exitCode = 1;
+        return;
+      }
+      const policy = await loadWorkspacePolicy(paths.policyFile);
+      io.writeOut("MCP servers\n");
+      if (loaded.value.servers.length === 0) {
+        io.writeOut("  (none configured — add .narthynx/mcp.yaml)\n");
+        return;
+      }
+      for (const s of loaded.value.servers) {
+        const polOk = policy.ok ? isMcpServerPolicyAllowed(policy.value, s.id) : false;
+        const cache = await readMcpToolsCache(paths.mcpCacheDir, s.id, Number.POSITIVE_INFINITY);
+        const fresh = cacheEntryFresh(cache, 5 * 60 * 1_000);
+        io.writeOut(`  - ${s.id}: ${s.command} ${s.args.join(" ")}\n`);
+        io.writeOut(
+          `      policyAllowed: ${polOk}, mcp.policy: ${policy.ok ? policy.value.mcp : "policy.yaml invalid"}\n`
+        );
+        if (cache) {
+          io.writeOut(`      cache: ${cache.cachedAt} (${cache.tools.length} tools, fresh=${fresh})\n`);
+        } else {
+          io.writeOut("      cache: (none)\n");
+        }
+      }
     });
 
   const triggers = program
