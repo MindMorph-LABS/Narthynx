@@ -28,6 +28,7 @@ export interface StatusParams {
   mission?: Mission;
   policyMode?: WorkspacePolicy["mode"];
   modelLabel: string;
+  companionSurfaceActive?: boolean;
 }
 
 export interface Renderer {

@@ -50,7 +50,13 @@ export const DEFAULT_POLICY: WorkspacePolicy = {
   mcp_max_concurrent_sessions: 1,
   github: "block",
   vault: "block",
-  daemon_background_actions: "draft_and_notify"
+  daemon_background_actions: "draft_and_notify",
+  companion_mode: "local_stub",
+  companion_tools: [],
+  companion_cloud_context: "block",
+  memory_storage: "minimal",
+  memory_sensitive_behavior: "block",
+  memory_mission_citations_required: true
 };
 
 export function defaultConfigYaml(): string {

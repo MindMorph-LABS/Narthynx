@@ -15,6 +15,7 @@ import { createDaemonHttpApp } from "./server";
 import { ensureScheduleFile, maybeEnqueueScheduledJobs } from "./scheduler";
 import { createLogNotificationSink } from "./notifications";
 import { processNextQueueJob, writeDaemonStatusSnapshot } from "./worker";
+import { deliverDueCompanionReminders } from "../companion/reminder-delivery";
 
 const DEFAULT_DAEMON_PORT = 17891;
 
@@ -110,6 +111,7 @@ export async function runDaemonForeground(options: RunDaemonOptions): Promise<vo
     try {
       const pol = await loadWorkspacePolicy(paths.policyFile);
       if (pol.ok) {
+        await deliverDueCompanionReminders(paths, workerCtx);
         await maybeEnqueueScheduledJobs(paths, (job) => queue.enqueue(job));
       }
       await processNextQueueJob(workerCtx, paths);

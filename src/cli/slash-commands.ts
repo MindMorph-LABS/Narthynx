@@ -21,6 +21,14 @@ import { createProofCardService } from "../missions/proof-card";
 import { createMissionInputFromTemplate, listMissionTemplates } from "../missions/templates";
 import { createToolRegistry } from "../tools/registry";
 import { createToolRunner } from "../tools/runner";
+import { buildDailyBriefingText, writeDailyBriefingArtifact } from "../companion/daily-briefing";
+import { materializeCompanionMissionDraft, buildMissionDraftFromCompanionChat } from "../companion/chat";
+import { acceptLatestProposedMissionSuggestion } from "../companion/mission-suggestions";
+import { appendCompanionReminder, parseRemindFireAt } from "../companion/reminders";
+import { detectMemoryConflicts, listOpenMemoryConflicts } from "../memory/conflicts";
+import { approveMemoryProposal, listPendingProposals, rejectMemoryProposal } from "../memory/proposals";
+import { listActiveMemoryItems, listMemoryRevisionLineage } from "../memory/store";
+import { listApprovedMemory } from "../memory/user-memory";
 import type { Renderer } from "./renderer";
 import { isCockpitMode, type InteractiveSessionState } from "./session";
 import { tokenizeSlashRest } from "./tokenize";
@@ -154,6 +162,16 @@ export async function dispatchSlashCommand(
       return handleDaemonEventsSlash(command.args, context);
     case "queue":
       return handleDaemonQueueSlash(context);
+    case "companion":
+      return handleCompanionSlash(command.args, context);
+    case "briefing":
+      return handleBriefingSlash(command.args, context);
+    case "mission-from-chat":
+      return handleMissionFromChatSlash(command.args, context);
+    case "remind":
+      return handleRemindSlash(command.args, context);
+    case "memory":
+      return handleCompanionMemorySlash(command.args, context);
     default:
       renderer.warn(
         `Unknown slash command: /${command.name}\n` +
@@ -765,6 +783,212 @@ async function handleDaemonQueueSlash(context: SlashCommandContext): Promise<Sla
   if (snap.pending.length > 12) {
     lines.push(`  … ${snap.pending.length - 12} more`);
   }
+  context.renderer.info(lines.join("\n"));
+  return stay(context.currentMissionId);
+}
+
+function handleCompanionSlash(args: string[], context: SlashCommandContext): SlashCommandResult {
+  const sub = args[0]?.toLowerCase();
+  if (sub === "off" || sub === "mission") {
+    context.session.companionSurfaceActive = false;
+    context.renderer.info("Companion conversational surface OFF — natural language routes to mission planner again.");
+    return stay(context.currentMissionId);
+  }
+
+  if (sub === "session" && args[1]) {
+    context.session.companionSessionId = args[1]!;
+    context.session.companionSurfaceActive = true;
+    context.renderer.info(`Companion session id "${context.session.companionSessionId}"`);
+    return stay(context.currentMissionId);
+  }
+
+  context.session.companionSurfaceActive = true;
+  context.renderer.info(
+    `Companion surface ON — session "${context.session.companionSessionId}". Type normally; slash /companion mission to leave. Execution stays missions-only (/run).`
+  );
+  return stay(context.currentMissionId);
+}
+
+async function handleBriefingSlash(args: string[], context: SlashCommandContext): Promise<SlashCommandResult> {
+  const paths = resolveWorkspacePaths(context.cwd);
+  const write = args.includes("--write");
+  if (write) {
+    const fp = await writeDailyBriefingArtifact({ cwd: context.cwd, paths });
+    context.renderer.info(`Briefing artifact written:\n${fp}`);
+  } else {
+    context.renderer.info(await buildDailyBriefingText({ cwd: context.cwd, paths }));
+  }
+  return stay(context.currentMissionId);
+}
+
+async function handleMissionFromChatSlash(args: string[], context: SlashCommandContext): Promise<SlashCommandResult> {
+  const sub = args[0]?.toLowerCase();
+  const paths = resolveWorkspacePaths(context.cwd);
+  const sid = context.session.companionSessionId;
+
+  if (!sub || sub === "draft") {
+    const draft = await buildMissionDraftFromCompanionChat(context.cwd, sid);
+    context.renderer.panel("Mission draft", draft);
+    return stay(context.currentMissionId);
+  }
+
+  if (sub === "accept") {
+    const result = await acceptLatestProposedMissionSuggestion(paths, context.cwd);
+    if ("error" in result) {
+      context.renderer.warn(result.error);
+    } else {
+      context.renderer.info(`Mission ${result.missionId} created from companion suggestion ${result.suggestionId}.`);
+      return stay(result.missionId);
+    }
+    return stay(context.currentMissionId);
+  }
+
+  if (sub === "materialize") {
+    const draft = await buildMissionDraftFromCompanionChat(context.cwd, sid);
+    const m = await materializeCompanionMissionDraft(context.cwd, draft);
+    context.renderer.info(`Mission ${m.missionId} created from transcript draft.`);
+    return stay(m.missionId);
+  }
+
+  context.renderer.warn("Usage: /mission-from-chat [draft | accept | materialize]");
+  return stay(context.currentMissionId);
+}
+
+async function handleRemindSlash(args: string[], context: SlashCommandContext): Promise<SlashCommandResult> {
+  if (args.length < 2) {
+    context.renderer.warn("Usage: /remind +<minutes>|ISO8601 <message text...>");
+    return stay(context.currentMissionId);
+  }
+
+  const when = args[0]!;
+  const message = args.slice(1).join(" ").trim();
+  if (!message) {
+    context.renderer.warn("Reminder message is required after the schedule token.");
+    return stay(context.currentMissionId);
+  }
+
+  const paths = resolveWorkspacePaths(context.cwd);
+  const sched = parseRemindFireAt(when, Date.now());
+  if (!sched.ok) {
+    context.renderer.warn(sched.reason);
+    return stay(context.currentMissionId);
+  }
+
+  const row = await appendCompanionReminder(paths, {
+    fireAt: sched.fireAtIso,
+    message,
+    sessionId: context.session.companionSessionId,
+    status: "pending"
+  });
+
+  const daemonPaths = paths;
+  const pid = await readDaemonPid(daemonPaths);
+  const running = pid !== null && isPidRunning(pid);
+  context.renderer.info(
+    `Reminder ${row.id} scheduled for ${row.fireAt}.\n` +
+      (running
+        ? "Daemon appears to be running — delivery will be attempted on the next tick."
+        : "Daemon is not running — reminder is saved locally, but delivery requires the Narthynx daemon (see docs/daemon.md).")
+  );
+  return stay(context.currentMissionId);
+}
+
+async function handleCompanionMemorySlash(args: string[], context: SlashCommandContext): Promise<SlashCommandResult> {
+  const paths = resolveWorkspacePaths(context.cwd);
+  const policy = await loadWorkspacePolicy(paths.policyFile);
+  if (!policy.ok) {
+    context.renderer.renderError(`policy.yaml invalid: ${policy.message}`);
+    return stay(context.currentMissionId);
+  }
+
+  const sub = args[0]?.toLowerCase();
+
+  if (sub === "approve") {
+    const id = args[1];
+    if (!id) {
+      context.renderer.warn("Usage: /memory approve <proposalId>");
+      return stay(context.currentMissionId);
+    }
+    const ok = await approveMemoryProposal(paths, id, policy.value);
+    context.renderer.info(ok ? `Approved memory proposal ${id}.` : `No pending proposal ${id}.`);
+    return stay(context.currentMissionId);
+  }
+
+  if (sub === "reject") {
+    const id = args[1];
+    if (!id) {
+      context.renderer.warn("Usage: /memory reject <proposalId>");
+      return stay(context.currentMissionId);
+    }
+    const ok = await rejectMemoryProposal(paths, id);
+    context.renderer.info(ok ? `Rejected proposal ${id}.` : `No pending proposal ${id}.`);
+    return stay(context.currentMissionId);
+  }
+
+  if (sub === "conflicts") {
+    const open = await listOpenMemoryConflicts(paths);
+    const items = await listActiveMemoryItems(paths);
+    const pairs = detectMemoryConflicts(items);
+    const lines = [
+      "Memory conflicts",
+      "",
+      `Open recorded: ${open.length}`,
+      ...open.map((c) => `  ${c.id}: ${c.item_ids.join(" vs ")}`),
+      "",
+      `Heuristic overlaps (not auto-recorded): ${pairs.length}`,
+      ...pairs.slice(0, 12).map(
+        (p) => `  ${p.similarity.toFixed(2)}  ${p.a.id} <> ${p.b.id}`
+      )
+    ];
+    if (pairs.length > 12) {
+      lines.push(`  …and ${pairs.length - 12} more`);
+    }
+    context.renderer.info(lines.join("\n"));
+    return stay(context.currentMissionId);
+  }
+
+  if (sub === "diff") {
+    const a = args[1];
+    const b = args[2];
+    if (!a || !b) {
+      context.renderer.warn("Usage: /memory diff <itemIdA> <itemIdB>");
+      return stay(context.currentMissionId);
+    }
+    const left = await listMemoryRevisionLineage(paths, a);
+    const right = await listMemoryRevisionLineage(paths, b);
+    if (left.length === 0 || right.length === 0) {
+      context.renderer.warn("One or both ids have no stored revisions.");
+      return stay(context.currentMissionId);
+    }
+    const la = left[left.length - 1]!;
+    const rb = right[right.length - 1]!;
+    context.renderer.panel(
+      "Memory diff (latest revisions)",
+      `--- ${a} (${la.updated_at})\n${la.text}\n\n--- ${b} (${rb.updated_at})\n${rb.text}`
+    );
+    return stay(context.currentMissionId);
+  }
+
+  if (sub && !["approve", "reject", "conflicts", "diff", "list"].includes(sub)) {
+    context.renderer.warn(
+      `Unknown /memory subcommand "${sub}". Try /memory, /memory list, /memory approve <id>, /memory conflicts, /memory diff <a> <b>.`
+    );
+    return stay(context.currentMissionId);
+  }
+
+  const pendingRows = await listPendingProposals(paths);
+  const approved = await listApprovedMemory(paths);
+  const lines = [
+    "Governed memory (F18)",
+    "",
+    "Pending proposals:",
+    ...pendingRows.map(
+      (p) => `  ${p.id}  ${p.updated_at}  ${p.text.slice(0, 120)}${p.text.length > 120 ? "…" : ""}`
+    ),
+    "",
+    "Approved snippets (user + relationship scopes):",
+    ...approved.slice(0, 20).map((a) => `  ${a.id}  ${a.ts}  ${a.text.slice(0, 120)}${a.text.length > 120 ? "…" : ""}`)
+  ];
   context.renderer.info(lines.join("\n"));
   return stay(context.currentMissionId);
 }

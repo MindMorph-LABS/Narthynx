@@ -17,6 +17,8 @@ import { doctorWorkspace, initWorkspace, resolveWorkspacePaths } from "../config
 import { runCockpitServer, resolveCockpitPort } from "../cockpit/serve";
 import { runInteractiveSession } from "./interactive";
 import { attachVaultCommands } from "./vault-cmd";
+import { attachMemoryCommands } from "./memory-cmd";
+import { runStandaloneCompanionCli } from "./companion-cli";
 import { createApprovalStore } from "../missions/approvals";
 import { createCheckpointStore } from "../missions/checkpoints";
 import { createReplayService } from "../missions/replay";
@@ -61,7 +63,9 @@ export const CLI_COMMANDS = [
   "doctor",
   "triggers",
   "vault",
-  "daemon"
+  "daemon",
+  "chat",
+  "memory"
 ] as const;
 
 export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
@@ -91,6 +95,8 @@ export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
     | "triggers"
     | "vault"
     | "daemon"
+    | "chat"
+    | "memory"
   > =>
     name !== "init" &&
     name !== "mission" &&
@@ -115,7 +121,9 @@ export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
     name !== "doctor" &&
     name !== "triggers" &&
     name !== "vault" &&
-    name !== "daemon"
+    name !== "daemon" &&
+    name !== "chat" &&
+    name !== "memory"
 );
 
 export interface CliResult {
@@ -235,6 +243,7 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
     });
 
   attachVaultCommands(program, cwd, io);
+  attachMemoryCommands(program, cwd, io);
 
   const mcpProgram = program.command("mcp").description("MCP connector helpers (stdio servers).");
 
@@ -829,6 +838,23 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
     });
 
   registerDaemonCommands(program, io, cwd);
+
+  program
+    .command("chat")
+    .alias("companion")
+    .description("Frontier F17 Companion — conversational surface (no direct tool execution).")
+    .option("-s, --session <id>", "Companion transcript session id", "default")
+    .option("-m, --message <text>", "Send one message non-interactively")
+    .action(async (opts: { session: string; message?: string }) => {
+      try {
+        const exit = await runStandaloneCompanionCli(io, cwd, opts.session, {
+          singleMessage: opts.message
+        });
+        process.exitCode = exit;
+      } catch (error) {
+        writeCliError(io, error);
+      }
+    });
 
   program
     .command("cockpit")
