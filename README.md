@@ -293,7 +293,7 @@ See:
 
 Each example is local-first, copyable, and avoids secrets, network calls, destructive shell commands, and unsupported autonomy claims.
 
-Phase 15 adds local Mission Kit primitives only: reusable mission templates, `context.md`/`context.json` context diet records, and local Markdown proof cards. It does not add browser automation, GitHub, hosted sync, or a web cockpit. **MCP (stdio)** is available as an optional connector behind policy; see [`docs/connectors.md`](docs/connectors.md).
+Phase 15 adds local Mission Kit primitives only: reusable mission templates, `context.md`/`context.json` context diet records, and local Markdown proof cards. It does not add browser automation, hosted sync, or a web cockpit. **MCP (stdio)** and the **GitHub REST** connector are optional behind policy; see [`docs/connectors.md`](docs/connectors.md).
 
 ## Development
 
@@ -315,12 +315,14 @@ Phase 15 Mission Kit and Phase 15.5 interactive shell UX are shipped. The MVP tr
 
 **MCP (stdio)** — optional `.narthynx/mcp.yaml`, typed `mcp.*` tools, `narthynx mcp list`; see [`docs/connectors.md`](docs/connectors.md) and [`docs/safety-model.md`](docs/safety-model.md).
 
+**GitHub (REST)** — optional `.narthynx/github.yaml`, typed `github.*` tools, `GITHUB_TOKEN` / `GH_TOKEN`; see [`docs/connectors.md`](docs/connectors.md).
+
 Post-MVP exploration:
 
 - local web cockpit
 - visual mission graph
-- browser connector
-- GitHub connector
+- advanced browser features (session reuse, CDP)
+- deeper GitHub (GitHub App, GraphQL) beyond REST v1
 - deeper context diet / memory engine
 - cloud/local hybrid execution
 - safe team collaboration

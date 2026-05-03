@@ -47,6 +47,15 @@ describe("tool registry", () => {
       "git.diff",
       "git.log",
       "git.status",
+      "github.issues.create",
+      "github.issues.createComment",
+      "github.issues.get",
+      "github.issues.list",
+      "github.issues.listComments",
+      "github.pulls.get",
+      "github.pulls.list",
+      "github.pulls.listFiles",
+      "github.repos.get",
       "mcp.servers.list",
       "mcp.tools.call",
       "mcp.tools.list",
@@ -67,6 +76,12 @@ describe("tool registry", () => {
     );
     expect(tools.map((tool) => `${tool.name}:${tool.sideEffect}:${tool.riskLevel}:${tool.requiresApproval}`)).toContain(
       "mcp.tools.call:external_comm:high:true"
+    );
+    expect(tools.map((tool) => `${tool.name}:${tool.sideEffect}:${tool.riskLevel}:${tool.requiresApproval}`)).toContain(
+      "github.repos.get:external_comm:low:false"
+    );
+    expect(tools.map((tool) => `${tool.name}:${tool.sideEffect}:${tool.riskLevel}:${tool.requiresApproval}`)).toContain(
+      "github.issues.create:external_comm:high:true"
     );
   });
 

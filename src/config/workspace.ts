@@ -3,6 +3,7 @@ import path from "node:path";
 
 import {
   CONFIG_FILE_NAME,
+  GITHUB_FILE_NAME,
   MCP_FILE_NAME,
   MISSIONS_DIR_NAME,
   POLICY_FILE_NAME,
@@ -10,6 +11,8 @@ import {
   defaultConfigYaml,
   defaultPolicyYaml
 } from "./defaults";
+import { loadGithubConfig, normalizeRepoAllowEntry } from "./github-config";
+import { getGithubAuthToken } from "./github-env";
 import { findMcpServer, loadMcpConfig } from "./mcp-config";
 import { loadWorkspaceConfig, loadWorkspacePolicy } from "./load";
 
@@ -19,6 +22,7 @@ export interface WorkspacePaths {
   configFile: string;
   policyFile: string;
   mcpFile: string;
+  githubFile: string;
   mcpCacheDir: string;
   missionsDir: string;
 }
@@ -52,6 +56,7 @@ export function resolveWorkspacePaths(cwd = process.cwd()): WorkspacePaths {
     configFile: path.join(workspaceDir, CONFIG_FILE_NAME),
     policyFile: path.join(workspaceDir, POLICY_FILE_NAME),
     mcpFile: path.join(workspaceDir, MCP_FILE_NAME),
+    githubFile: path.join(workspaceDir, GITHUB_FILE_NAME),
     mcpCacheDir: path.join(workspaceDir, ".cache", "mcp-tools"),
     missionsDir: path.join(workspaceDir, MISSIONS_DIR_NAME)
   };
@@ -107,6 +112,48 @@ export async function doctorWorkspace(cwd = process.cwd()): Promise<DoctorResult
         : "mcp.yaml absent or empty (no MCP servers configured)"
       : `mcp.yaml invalid: ${mcpConfig.message}`
   });
+
+  const githubConfig = await loadGithubConfig(paths.githubFile);
+  checks.push({
+    name: "github yaml",
+    ok: githubConfig.ok,
+    message: githubConfig.ok
+      ? githubConfig.value.repos_allow?.length
+        ? `github.yaml OK (repos_allow: ${githubConfig.value.repos_allow.length})`
+        : "github.yaml absent or has no repos_allow"
+      : `github.yaml invalid: ${githubConfig.message}`
+  });
+
+  if (policy.ok && githubConfig.ok && policy.value.github !== "block") {
+    const token = getGithubAuthToken();
+    checks.push({
+      name: "github token",
+      ok: Boolean(token),
+      message: token
+        ? "GITHUB_TOKEN or GH_TOKEN is set"
+        : "GITHUB_TOKEN or GH_TOKEN is not set (required for github.* tools when policy allows GitHub)"
+    });
+  }
+
+  if (
+    policy.ok &&
+    githubConfig.ok &&
+    policy.value.github_repos_allow &&
+    githubConfig.value.repos_allow &&
+    policy.value.github_repos_allow.length > 0 &&
+    githubConfig.value.repos_allow.length > 0
+  ) {
+    const pSet = new Set(policy.value.github_repos_allow.map(normalizeRepoAllowEntry));
+    const intersection = githubConfig.value.repos_allow.map(normalizeRepoAllowEntry).filter((r) => pSet.has(r));
+    const coherenceOk = intersection.length > 0;
+    checks.push({
+      name: "github allowlist intersection",
+      ok: coherenceOk,
+      message: coherenceOk
+        ? `policy and github.yaml allowlists overlap (${intersection.length} repo(s))`
+        : "policy.github_repos_allow and github.yaml repos_allow have no common entries (empty intersection)"
+    });
+  }
 
   if (policy.ok && mcpConfig.ok && policy.value.mcp !== "block" && policy.value.mcp_servers_allow !== undefined) {
     const allowed = new Set(policy.value.mcp_servers_allow);

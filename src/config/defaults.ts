@@ -6,6 +6,7 @@ export const WORKSPACE_DIR_NAME = ".narthynx";
 export const CONFIG_FILE_NAME = "config.yaml";
 export const POLICY_FILE_NAME = "policy.yaml";
 export const MCP_FILE_NAME = "mcp.yaml";
+export const GITHUB_FILE_NAME = "github.yaml";
 export const MISSIONS_DIR_NAME = "missions";
 
 export const DEFAULT_CONFIG = {
@@ -43,7 +44,8 @@ export const DEFAULT_POLICY: WorkspacePolicy = {
   browser_max_navigation_ms: 30_000,
   browser_max_steps_per_session: 50,
   mcp: "block",
-  mcp_max_concurrent_sessions: 1
+  mcp_max_concurrent_sessions: 1,
+  github: "block"
 };
 
 export function defaultConfigYaml(): string {

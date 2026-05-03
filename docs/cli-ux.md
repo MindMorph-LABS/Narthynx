@@ -116,6 +116,8 @@ The Phase 13 executor does not use `!` or shell tools. It only uses deterministi
 
 `/policy` is read-only. Policy edits need a future typed update workflow so safety defaults are not weakened casually.
 
+`narthynx doctor` includes **`github yaml`**, optional **GitHub token** and **allowlist intersection** checks when GitHub tooling is enabled in policy (see [`connectors.md`](connectors.md)).
+
 ## External CLI Flow
 
 The documented Phase 14 demo path should stay copyable:

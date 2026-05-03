@@ -9,6 +9,7 @@ import { appendLedgerEvent, ledgerFilePath } from "../missions/ledger";
 import { createMissionStore, missionDirectory } from "../missions/store";
 import { extractBrowserUrlsFromInput, isBrowserToolName, classifyBrowserInputSafety } from "./browser-guard";
 import { classifyShellRunInputSafety, shellRunApprovalTarget } from "./command-safety";
+import { classifyGithubInputSafety, isGithubToolName } from "./github-guard";
 import { classifyMcpInputSafety } from "./mcp-guard";
 import { classifyToolPolicy } from "./policy";
 import { createToolRegistry, type ToolRegistry } from "./registry";
@@ -320,6 +321,10 @@ async function classifyToolInputSafety(
     });
   }
 
+  if (isGithubToolName(toolName)) {
+    return classifyGithubInputSafety(toolName, input, { rootDir, policy });
+  }
+
   return { ok: true };
 }
 
@@ -348,6 +353,38 @@ function approvalTargetForTool(toolName: string, input: unknown): string | undef
     }
   }
 
+  if (isGithubToolName(toolName) && typeof input === "object" && input !== null && "repo" in input) {
+    const repo = (input as { repo?: unknown }).repo;
+    const owner = (input as { owner?: unknown }).owner;
+    const issueNum = (input as { issue_number?: unknown }).issue_number;
+    const pullNum = (input as { pull_number?: unknown }).pull_number;
+    if (typeof repo !== "string") {
+      return undefined;
+    }
+    let ref = repo.trim();
+    if (typeof owner === "string" && owner.trim() && !ref.includes("/")) {
+      ref = `${owner.trim()}/${ref}`;
+    }
+    if (toolName === "github.issues.createComment" || toolName === "github.issues.get" || toolName === "github.issues.listComments") {
+      if (typeof issueNum === "number") {
+        return `github:${ref}#issue-${issueNum}`;
+      }
+    }
+    if (
+      toolName === "github.pulls.get" ||
+      toolName === "github.pulls.listFiles" ||
+      toolName === "github.pulls.list"
+    ) {
+      if (typeof pullNum === "number") {
+        return `github:${ref}#pull-${pullNum}`;
+      }
+    }
+    if (toolName === "github.issues.create" && "title" in input && typeof (input as { title?: unknown }).title === "string") {
+      return `github:${ref}:new-issue:${(input as { title: string }).title.slice(0, 80)}`;
+    }
+    return `github:${ref}`;
+  }
+
   if (typeof input === "object" && input !== null && "path" in input) {
     const value = (input as { path?: unknown }).path;
     return typeof value === "string" ? value : undefined;
@@ -363,6 +400,8 @@ function isApprovalContinuationTool(toolName: string): boolean {
     toolName === "shell.run" ||
     toolName === "mcp.tools.list" ||
     toolName === "mcp.tools.call" ||
+    toolName === "github.issues.create" ||
+    toolName === "github.issues.createComment" ||
     isBrowserToolName(toolName)
   );
 }

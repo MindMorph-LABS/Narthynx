@@ -66,6 +66,7 @@ browser_max_navigation_ms: 30000
 browser_max_steps_per_session: 50
 mcp: block
 mcp_max_concurrent_sessions: 1
+github: block
 ```
 
 ## Browser tools and policy
@@ -83,6 +84,12 @@ URLs outside the allowlist are blocked at input validation. See [`connectors.md`
 `mcp` defaults to `block` on new workspaces. Set `mcp: ask` and optionally `mcp_servers_allow` before using MCP tools. `mcp.tools.call` is classified as **external communication**; allow it only with `external_communication: ask` (or looser) in addition to a non-`block` `mcp` setting.
 
 MCP servers run as separate processes. Treat them as **high trust** and **high impact**: limit servers via `mcp.yaml`, use `tools_allow` / `tools_deny`, keep `external_communication` conservative, and rely on approvals for `mcp.tools.call`. Timeouts kill the session; large tool results spill to `mcp_tool_output` artifacts when they exceed per-server `maxOutputBytes`.
+
+## GitHub tools and policy
+
+`github` defaults to **`block`**. To use `github.*` tools, set **`github: ask`** (or stricter future modes), loosen **`external_communication`** from `block` as appropriate, and export **`GITHUB_TOKEN`** or **`GH_TOKEN`** in the environment—not in workspace or mission YAML.
+
+Optional **`github_repos_allow`** in `policy.yaml` and **`repos_allow`** in `.narthynx/github.yaml` restrict which `owner/repo` pairs can be targeted; when both are set, only repos in the **intersection** are allowed. Large API payloads spill to **`github_api_response`** artifacts. See [`connectors.md`](connectors.md).
 
 ## Approval Prompt Format
 

@@ -25,7 +25,8 @@ export const artifactSchema = z.object({
     "proof_card",
     "browser_screenshot",
     "browser_snapshot",
-    "mcp_tool_output"
+    "mcp_tool_output",
+    "github_api_response"
   ]),
   path: z.string().min(1),
   title: z.string().min(1),

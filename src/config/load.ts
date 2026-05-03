@@ -32,7 +32,10 @@ export const policySchema = z.object({
   browser_max_steps_per_session: z.number().int().min(1).max(100).default(50),
   mcp: z.enum(["block", "ask"]).default("block"),
   mcp_servers_allow: z.array(z.string()).optional(),
-  mcp_max_concurrent_sessions: z.number().int().min(1).max(8).optional()
+  mcp_max_concurrent_sessions: z.number().int().min(1).max(8).optional(),
+  github: z.enum(["block", "ask"]).default("block"),
+  /** When set, only these `owner/repo` refs (case-insensitive) may be targeted by github.* tools. */
+  github_repos_allow: z.array(z.string().min(1)).optional()
 });
 
 export type WorkspaceConfig = z.infer<typeof configSchema>;
