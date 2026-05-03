@@ -12,6 +12,8 @@ Roadmap **phase numbers** 16–18 below describe **connector** deliverables (bro
 | ----- | ---- | ----------- |
 | **Frontier F16** | [`docs/daemon.md`](daemon.md), appendix | Always-on localhost daemon (queue, events, schedules) |
 | **Frontier F17** | [`docs/companion.md`](companion.md) | Companion Mode (chat, memory proposals, mission handoff, reminders) |
+| **Frontier F19** | [`docs/context-kernel.md`](context-kernel.md) | Context compiler / `ContextPacket` artifacts (`docs/context-kernel.md`) |
+| **Frontier F20** | [`docs/subagents.md`](subagents.md) | Bounded expert subagents (verifier/planner/safety/critic sessions) |
 | **Connector C16** | Phase 16 below, [`docs/connectors.md`](connectors.md) | Browser (Playwright) connector |
 | **Connector C17** | Phase 17 below | MCP connector |
 | **Connector C18** | Phase 18 below | GitHub REST connector |
@@ -43,6 +45,7 @@ Roadmap **phase numbers** 16–18 below describe **connector** deliverables (bro
 - **Frontier F16 (daemon):** Implemented — local process + lockfile, localhost API (`docs/daemon.md`), JSONL queue/events, schedules, CLI + slash commands; optional trigger → queue follow-up jobs
 - **Frontier F17 (companion):** Implemented — policy `companion_mode`, JSONL companion store, `companion_chat` router task with strict JSON, interactive + `narthynx chat`, `/briefing` / `/remind` / `/mission-from-chat`, governed memory proposals, daemon reminder tick (`docs/companion.md`)
 - **Frontier F19 (context kernel):** Implemented — `src/context/*` compiler, ledger `context.packet_logged`, artifacts under `artifacts/context-packets/`, CLI `narthynx context diet|inspect`, slash `/context why|diet`; see [`docs/context-kernel.md`](context-kernel.md). Semantic relevance stays keyword-heuristic only; richer summarization is deferred.
+- **Frontier F20 (bounded subagents):** Implemented — optional `.narthynx/subagents.yaml`, orchestrated sessions (`subagent_*` router tasks), tool-gated execution through `createToolRunner`, ledger `subagent.*` events; no swarm/multi-hop research companion — see [`docs/subagents.md`](subagents.md)
 
 ## Phases
 
@@ -73,6 +76,7 @@ Roadmap **phase numbers** 16–18 below describe **connector** deliverables (bro
 | 16+ | Post-MVP SOTA Extensions | Post-MVP only | Deeper email/calendar, GitHub App + GraphQL, advanced browser/MCP transports (session reuse, CDP, remote MCP), and other connectors after runtime hardening |
 | F17 | Frontier Companion | Complete | Conversational surface + approval-gated memory + mission handoff + daemon reminders (`docs/companion.md`) |
 | F19 | Frontier Context Kernel | Complete | Inspectable compiled context (`ContextPacket`), ledger + artifacts, diet/diff tooling; see [`docs/context-kernel.md`](context-kernel.md) |
+| F20 | Frontier Bounded Subagents | Complete | Verifier/planner/safety/critic hats, YAML profiles, ledger `subagent.*`, CLI + slash (`docs/subagents.md`) |
 
 ## MVP Success Definition
 

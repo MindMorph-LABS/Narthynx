@@ -18,6 +18,7 @@ import { runInteractiveSession } from "./interactive";
 import { attachVaultCommands } from "./vault-cmd";
 import { attachContextCommands } from "./context-cmd";
 import { attachMemoryCommands } from "./memory-cmd";
+import { attachSubagentsCommands } from "./subagents-cmd";
 import { runStandaloneCompanionCli } from "./companion-cli";
 import { createApprovalStore } from "../missions/approvals";
 import { createCheckpointStore } from "../missions/checkpoints";
@@ -63,7 +64,8 @@ export const CLI_COMMANDS = [
   "vault",
   "daemon",
   "chat",
-  "memory"
+  "memory",
+  "subagents"
 ] as const;
 
 export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
@@ -95,6 +97,7 @@ export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
     | "daemon"
     | "chat"
     | "memory"
+    | "subagents"
   > =>
     name !== "init" &&
     name !== "mission" &&
@@ -121,7 +124,8 @@ export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
     name !== "vault" &&
     name !== "daemon" &&
     name !== "chat" &&
-    name !== "memory"
+    name !== "memory" &&
+    name !== "subagents"
 );
 
 export interface CliResult {
@@ -242,6 +246,7 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
   attachVaultCommands(program, cwd, io);
   attachMemoryCommands(program, cwd, io);
   attachContextCommands(program, cwd, io);
+  attachSubagentsCommands(program, cwd, io);
 
   const mcpProgram = program.command("mcp").description("MCP connector helpers (stdio servers).");
 

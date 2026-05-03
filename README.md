@@ -71,6 +71,7 @@ Implemented:
 - Open-source polish docs, examples, templates, and release checklist.
 - Phase 15 Mission Kit plus **Frontier F19 context kernel**: templates, inspectable compiled context packets (`artifacts/context-packets/`, ledger `context.packet_logged`; see `docs/context-kernel.md`).
 - **Phase 15d:** encrypted per-mission vault (`narthynx vault`, `vault.read`, policy `vault`) — see [`docs/vault.md`](docs/vault.md).
+- **Frontier F20:** bounded subagent sessions (verifier / safety / critic / planner) with `.narthynx/subagents.yaml`, ledger attribution, CLI + slash — see [`docs/subagents.md`](docs/subagents.md).
 
 Narthynx intentionally fails honestly for behavior outside the current runtime. It does not pretend later-phase integrations exist.
 

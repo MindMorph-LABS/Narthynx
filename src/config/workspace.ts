@@ -8,6 +8,7 @@ import {
   MCP_FILE_NAME,
   MISSIONS_DIR_NAME,
   POLICY_FILE_NAME,
+  SUBAGENTS_FILE_NAME,
   WORKSPACE_DIR_NAME,
   defaultConfigYaml,
   defaultPolicyYaml,
@@ -29,6 +30,7 @@ export interface WorkspacePaths {
   policyFile: string;
   identityFile: string;
   contextDietFile: string;
+  subagentsFile: string;
   modelRoutingFile: string;
   mcpFile: string;
   githubFile: string;
@@ -99,6 +101,7 @@ export function resolveWorkspacePaths(cwd = process.cwd()): WorkspacePaths {
     policyFile: path.join(workspaceDir, POLICY_FILE_NAME),
     identityFile: path.join(workspaceDir, IDENTITY_FILE_NAME),
     contextDietFile: path.join(workspaceDir, CONTEXT_DIET_FILE_NAME),
+    subagentsFile: path.join(workspaceDir, SUBAGENTS_FILE_NAME),
     modelRoutingFile: path.join(workspaceDir, MODEL_ROUTING_FILE_NAME),
     mcpFile: path.join(workspaceDir, MCP_FILE_NAME),
     githubFile: path.join(workspaceDir, GITHUB_FILE_NAME),

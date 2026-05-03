@@ -7,12 +7,14 @@ import { loadContextDietConfig } from "../config/context-diet-config";
 import { loadWorkspacePolicy } from "../config/load";
 import { resolveWorkspaceActor } from "../config/identity-config";
 import { doctorWorkspace, resolveWorkspacePaths } from "../config/workspace";
+import { loadSubagentsConfig } from "../config/subagents-config";
 import { readDaemonPid, isPidRunning } from "../daemon/process-manager";
 import { readDaemonEvents } from "../daemon/event-bus";
 import { readAllQueueOps, deriveQueueFromOps } from "../daemon/queue";
 import { createCostService } from "../agent/cost";
 import { createMissionExecutor } from "../agent/executor";
 import { createModelPlanner } from "../agent/model-planner";
+import { createModelRouter } from "../agent/model-router";
 import { createApprovalStore } from "../missions/approvals";
 import { createCheckpointStore } from "../missions/checkpoints";
 import { createReplayService } from "../missions/replay";
@@ -24,6 +26,7 @@ import { createProofCardService } from "../missions/proof-card";
 import { createMissionInputFromTemplate, listMissionTemplates } from "../missions/templates";
 import { createToolRegistry } from "../tools/registry";
 import { createToolRunner } from "../tools/runner";
+import { runSubagentSession } from "../subagents/orchestrator";
 import { buildDailyBriefingText, writeDailyBriefingArtifact } from "../companion/daily-briefing";
 import { materializeCompanionMissionDraft, buildMissionDraftFromCompanionChat } from "../companion/chat";
 import { acceptLatestProposedMissionSuggestion } from "../companion/mission-suggestions";
@@ -175,6 +178,12 @@ export async function dispatchSlashCommand(
       return handleRemindSlash(command.args, context);
     case "memory":
       return handleCompanionMemorySlash(command.args, context);
+    case "verify":
+      return handleVerifySlash(command.args, context, stores);
+    case "critique":
+      return handleCritiqueSlash(command.args, context, stores);
+    case "subagents":
+      return handleSubagentsSlash(command.args, context, stores);
     default:
       renderer.warn(
         `Unknown slash command: /${command.name}\n` +
@@ -201,6 +210,236 @@ function createInteractiveStores(cwd: string) {
     toolRegistry,
     toolRunner: createToolRunner({ cwd, registry: toolRegistry })
   };
+}
+
+function stripPlannerApplyFlags(tokens: string[]): {
+  rest: string[];
+  applyPlanner: boolean;
+  plannerConfirmYes: boolean;
+} {
+  let applyPlanner = false;
+  let plannerConfirmYes = false;
+  const rest: string[] = [];
+  for (const t of tokens) {
+    if (t === "--apply") {
+      applyPlanner = true;
+      continue;
+    }
+    if (t === "--yes") {
+      plannerConfirmYes = true;
+      continue;
+    }
+    rest.push(t);
+  }
+  return { rest, applyPlanner, plannerConfirmYes };
+}
+
+function parseHypotheticalToolTokens(tokens: string[]): { hypotheticalTool?: { toolName: string; toolInput: unknown } } {
+  let i = 0;
+  while (i < tokens.length) {
+    const t = tokens[i];
+    if (t === "--tool") {
+      const name = tokens[i + 1];
+      if (!name) {
+        throw new Error("--tool requires a tool name.");
+      }
+      const after = tokens.slice(i + 2);
+      const ij = after.indexOf("--input-json");
+      if (ij !== -1) {
+        const raw = after.slice(ij + 1).join(" ").trim();
+        return { hypotheticalTool: { toolName: name, toolInput: parseJsonInput(raw.length > 0 ? raw : "{}") } };
+      }
+      return { hypotheticalTool: { toolName: name, toolInput: {} } };
+    }
+    if (t && !t.startsWith("--")) {
+      const raw = tokens.slice(i + 1).join(" ").trim();
+      return { hypotheticalTool: { toolName: t, toolInput: parseJsonInput(raw.length > 0 ? raw : "{}") } };
+    }
+    i += 1;
+  }
+  return {};
+}
+
+async function slashRunSubagent(input: {
+  cwd: string;
+  stores: ReturnType<typeof createInteractiveStores>;
+  renderer: Renderer;
+  missionId: string;
+  profileId: string;
+  hypotheticalTool?: { toolName: string; toolInput: unknown };
+  applyPlanner?: boolean;
+  plannerConfirmYes?: boolean;
+}): Promise<void> {
+  const router = createModelRouter({ cwd: input.cwd, approvalStore: input.stores.approvalStore });
+  const result = await runSubagentSession({
+    cwd: input.cwd,
+    missionId: input.missionId,
+    profileId: input.profileId,
+    router,
+    approvalStoreProvided: input.stores.approvalStore,
+    hypotheticalTool: input.hypotheticalTool,
+    applyPlanner: input.applyPlanner,
+    plannerConfirmYes: input.plannerConfirmYes
+  });
+
+  input.renderer.rawBlock(
+    JSON.stringify(
+      {
+        status: result.status,
+        profileId: result.profileId,
+        sessionId: result.sessionId,
+        error: result.error,
+        budgetUsed: result.budgetUsed,
+        payload: result.payload,
+        transcriptPreview: result.transcriptPreview
+      },
+      null,
+      2
+    )
+  );
+
+  if (result.status === "failed") {
+    input.renderer.warn(result.error ?? "Subagent session failed.");
+  }
+}
+
+async function handleVerifySlash(
+  args: string[],
+  context: SlashCommandContext,
+  stores: ReturnType<typeof createInteractiveStores>
+): Promise<SlashCommandResult> {
+  try {
+    const missionId = resolveMissionArgument(args, context.currentMissionId);
+    await slashRunSubagent({
+      cwd: context.cwd,
+      stores,
+      renderer: context.renderer,
+      missionId,
+      profileId: "verifier"
+    });
+    return stay(missionId);
+  } catch (error) {
+    context.renderer.renderError(error instanceof Error ? error.message : "verify failed.");
+    return stay(context.currentMissionId);
+  }
+}
+
+async function handleCritiqueSlash(
+  args: string[],
+  context: SlashCommandContext,
+  stores: ReturnType<typeof createInteractiveStores>
+): Promise<SlashCommandResult> {
+  try {
+    const rest = [...args];
+    let missionId = context.currentMissionId;
+    if (rest[0] && isMissionId(rest[0]!)) {
+      missionId = rest.shift();
+    }
+
+    const mid = missionId ?? requireCurrentMission(context.currentMissionId);
+    const { hypotheticalTool } = parseHypotheticalToolTokens(rest);
+
+    await slashRunSubagent({
+      cwd: context.cwd,
+      stores,
+      renderer: context.renderer,
+      missionId: mid,
+      profileId: "critic",
+      hypotheticalTool
+    });
+    return stay(mid);
+  } catch (error) {
+    context.renderer.renderError(error instanceof Error ? error.message : "critique failed.");
+    return stay(context.currentMissionId);
+  }
+}
+
+async function handleSubagentsSlash(
+  args: string[],
+  context: SlashCommandContext,
+  stores: ReturnType<typeof createInteractiveStores>
+): Promise<SlashCommandResult> {
+  const sub = (args[0] ?? "").toLowerCase();
+  try {
+    if (sub === "" || sub === "help") {
+      context.renderer.info(
+        [
+          "Usage:",
+          "  /subagents list",
+          "  /subagents inspect <profile>",
+          "  /subagents run <profile> [<mission>] [--apply] [--yes] [--tool <name> [--input-json <json>]]",
+          "  /verify [<mission>]",
+          "  /critique [<mission>] [--tool <name> [--input-json <json>]] | [<mission>] <tool> <json...>",
+          "Or CLI: `narthynx subagents …`."
+        ].join("\n")
+      );
+      return stay(context.currentMissionId);
+    }
+
+    const paths = resolveWorkspacePaths(context.cwd);
+    const cfg = await loadSubagentsConfig(paths.subagentsFile);
+
+    if (sub === "list") {
+      if (!cfg.ok) {
+        throw new Error(`subagents.yaml invalid: ${cfg.message}`);
+      }
+      const lines = [`enabled=${String(cfg.value.enabled)} path=${cfg.path}`, ""];
+      for (const [id, profile] of Object.entries(cfg.value.profiles)) {
+        lines.push(`${id}: kind=${profile.kind} maxTurns=${profile.maxTurns} tools=${profile.maxToolCallsPerSession} models=${profile.maxModelCallsPerSession}`);
+      }
+      context.renderer.info(lines.join("\n"));
+      return stay(context.currentMissionId);
+    }
+
+    if (sub === "inspect") {
+      const id = args[1]?.trim();
+      if (!id) {
+        throw new Error('Usage: /subagents inspect <profile>');
+      }
+      if (!cfg.ok) {
+        throw new Error(`subagents.yaml invalid: ${cfg.message}`);
+      }
+      const profile = cfg.value.profiles[id];
+      if (!profile) {
+        throw new Error(`Unknown profile "${id}".`);
+      }
+      context.renderer.rawBlock(JSON.stringify(profile, null, 2));
+      return stay(context.currentMissionId);
+    }
+
+    if (sub === "run") {
+      const profileId = args[1]?.trim();
+      if (!profileId) {
+        throw new Error('Usage: /subagents run <profile> [<mission-id>] [--apply] [--yes] [--tool ...]');
+      }
+      let idx = 2;
+      let missionId = context.currentMissionId;
+      if (args[idx] && isMissionId(args[idx]!)) {
+        missionId = args[idx];
+        idx += 1;
+      }
+      const mid = missionId ?? requireCurrentMission(context.currentMissionId);
+      const { rest: tail, applyPlanner, plannerConfirmYes } = stripPlannerApplyFlags(args.slice(idx));
+      const { hypotheticalTool } = parseHypotheticalToolTokens(tail);
+
+      await slashRunSubagent({
+        cwd: context.cwd,
+        stores,
+        renderer: context.renderer,
+        missionId: mid,
+        profileId,
+        hypotheticalTool,
+        applyPlanner,
+        plannerConfirmYes
+      });
+      return stay(mid);
+    }
+
+    throw new Error(`Unknown /subagents subcommand: ${sub}`);
+  } catch (error) {
+    context.renderer.renderError(error instanceof Error ? error.message : "/subagents failed.");
+    return stay(context.currentMissionId);
+  }
 }
 
 async function handleMissionCommand(

@@ -8,6 +8,7 @@ export const POLICY_FILE_NAME = "policy.yaml";
 export const MCP_FILE_NAME = "mcp.yaml";
 export const GITHUB_FILE_NAME = "github.yaml";
 export const CONTEXT_DIET_FILE_NAME = "context-diet.yaml";
+export const SUBAGENTS_FILE_NAME = "subagents.yaml";
 export const MISSIONS_DIR_NAME = "missions";
 /** Hex-encoded 32-byte salt for per-workspace vault KDF binding. */
 export const VAULT_KDF_SALT_FILE_NAME = "vault-kdf.salt";
