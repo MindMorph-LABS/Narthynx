@@ -309,13 +309,14 @@ Before opening a PR, run the relevant tests and update docs when behavior change
 
 ## Roadmap
 
-Phase 15 Mission Kit and Phase 15.5 interactive shell UX are shipped. The MVP track through Phase 14 plus Mission Kit is complete. See `CHANGELOG.md` and `docs/roadmap.md`.
+Phase 15 Mission Kit and Phase 15.5 interactive shell UX are shipped. The MVP track through Phase 14 plus Mission Kit is complete. See [`CHANGELOG.md`](CHANGELOG.md) and [`docs/roadmap.md`](docs/roadmap.md).
+
+**Event-to-mission triggers** (rules, Event Memory, Cockpit `POST /api/triggers/github`, CLI `narthynx triggers`) are documented in [`docs/triggers.md`](docs/triggers.md). They only create missions and optional context—not auto-execution.
 
 Post-MVP exploration:
 
 - local web cockpit
 - visual mission graph
-- event-to-mission triggers
 - browser connector
 - MCP connector
 - GitHub connector

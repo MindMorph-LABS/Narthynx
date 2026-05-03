@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { stdin } from "node:process";
 import { fileURLToPath } from "node:url";
 
 import { Command, CommanderError } from "commander";
@@ -17,6 +20,9 @@ import { createMissionStore, missionFilePath } from "../missions/store";
 import { createMissionContextService } from "../missions/context";
 import { createProofCardService } from "../missions/proof-card";
 import { createMissionInputFromTemplate, listMissionTemplates } from "../missions/templates";
+import { ingestTriggerEvent, replayTriggerByEventId, formatTriggersDoctorMessage } from "../triggers/engine";
+import { loadTriggersConfig } from "../triggers/rules";
+import { readTriggerLogLines } from "../triggers/event-log";
 import { createToolRegistry } from "../tools/registry";
 import { createToolRunner } from "../tools/runner";
 
@@ -43,7 +49,8 @@ export const CLI_COMMANDS = [
   "pause",
   "resume",
   "replay",
-  "doctor"
+  "doctor",
+  "triggers"
 ] as const;
 
 export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
@@ -70,6 +77,7 @@ export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
     | "resume"
     | "replay"
     | "doctor"
+    | "triggers"
   > =>
     name !== "init" &&
     name !== "mission" &&
@@ -91,7 +99,8 @@ export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
     name !== "pause" &&
     name !== "resume" &&
     name !== "replay" &&
-    name !== "doctor"
+    name !== "doctor" &&
+    name !== "triggers"
 );
 
 export interface CliResult {
@@ -208,6 +217,119 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
       }
 
       io.writeOut("Workspace is healthy.\n");
+    });
+
+  const triggers = program
+    .command("triggers")
+    .description("Event-to-mission triggers (declarative rules, Event Memory, dedup).");
+
+  triggers
+    .command("doctor")
+    .description("Validate .narthynx/triggers.yaml.")
+    .action(async () => {
+      const paths = resolveWorkspacePaths(cwd);
+      const loaded = await loadTriggersConfig(paths);
+      if (!loaded.ok) {
+        io.writeErr(`${loaded.message}\n`);
+        io.writeOut(`${formatTriggersDoctorMessage(paths)}\n`);
+        process.exitCode = 1;
+        return;
+      }
+      io.writeOut(`triggers.yaml OK (${loaded.config.rules.length} rule(s))\n`);
+    });
+
+  triggers
+    .command("test")
+    .description("Dry-run ingest from a JSON fixture (no mission created).")
+    .requiredOption("--fixture <path>", "Path to webhook JSON body")
+    .option("--source <source>", "trigger source", "github")
+    .option("--event <name>", "GitHub X-GitHub-Event value", "issues")
+    .action(async (commandOptions: { fixture: string; source: string; event: string }) => {
+      try {
+        const raw = await readFile(path.resolve(cwd, commandOptions.fixture), "utf8");
+        const parsedJson = JSON.parse(raw) as unknown;
+        const res = await ingestTriggerEvent(cwd, {
+          source: commandOptions.source as "github" | "manual" | "generic",
+          rawBody: raw,
+          parsedJson,
+          githubEventName: commandOptions.event,
+          dryRun: true
+        });
+        io.writeOut(`${JSON.stringify(res, null, 2)}\n`);
+        if (!res.ok) {
+          process.exitCode = 1;
+        }
+      } catch (error) {
+        writeCliError(io, error);
+      }
+    });
+
+  triggers
+    .command("ingest")
+    .description("Ingest an event payload and create missions when rules match.")
+    .requiredOption("--source <source>", "github | manual | generic")
+    .option("--file <path>", "Payload file (omit or `-` for stdin)")
+    .option("--event <name>", "For GitHub: X-GitHub-Event value", "issues")
+    .action(async (commandOptions: { source: string; file?: string; event: string }) => {
+      try {
+        let raw: string;
+        if (!commandOptions.file || commandOptions.file === "-") {
+          raw = await readStdinUtf8();
+        } else {
+          raw = await readFile(path.resolve(cwd, commandOptions.file), "utf8");
+        }
+        if (!raw.trim()) {
+          throw new Error("Empty payload");
+        }
+        const parsedJson = JSON.parse(raw) as unknown;
+        const src = commandOptions.source as "github" | "manual" | "generic";
+        const res = await ingestTriggerEvent(cwd, {
+          source: src,
+          rawBody: raw,
+          parsedJson,
+          githubEventName: src === "github" ? commandOptions.event : undefined,
+          dryRun: false
+        });
+        io.writeOut(`${JSON.stringify(res, null, 2)}\n`);
+        if (!res.ok) {
+          process.exitCode = 1;
+        }
+      } catch (error) {
+        writeCliError(io, error);
+      }
+    });
+
+  triggers
+    .command("log")
+    .description("Print trigger event log lines (JSON) within a time window.")
+    .option("--hours <n>", "Only entries newer than N hours", "24")
+    .action(async (commandOptions: { hours: string }) => {
+      const hours = Math.max(0, Number(commandOptions.hours) || 24);
+      const since = Date.now() - hours * 3600_000;
+      const paths = resolveWorkspacePaths(cwd);
+      const lines = await readTriggerLogLines(paths);
+      for (const line of lines) {
+        if (new Date(line.receivedAt).getTime() >= since) {
+          io.writeOut(`${JSON.stringify(line)}\n`);
+        }
+      }
+    });
+
+  triggers
+    .command("replay")
+    .description("Re-run ingest from a stored trigger event id.")
+    .argument("<eventId>", "event id from trigger log (e_trig_…) ")
+    .option("--force", "Bypass dedup", false)
+    .action(async (eventId: string, commandOptions: { force: boolean }) => {
+      try {
+        const res = await replayTriggerByEventId(cwd, eventId, { force: commandOptions.force });
+        io.writeOut(`${JSON.stringify(res, null, 2)}\n`);
+        if (!res.ok) {
+          process.exitCode = 1;
+        }
+      } catch (error) {
+        writeCliError(io, error);
+      }
     });
 
   program
@@ -700,6 +822,17 @@ function placeholderDescription(commandName: (typeof PLACEHOLDER_COMMANDS)[numbe
   const descriptions: Record<(typeof PLACEHOLDER_COMMANDS)[number], string> = {};
 
   return descriptions[commandName];
+}
+
+async function readStdinUtf8(): Promise<string> {
+  if (stdin.isTTY) {
+    throw new Error("stdin is a TTY — pass JSON via --file path or pipe into this command");
+  }
+  const chunks: Buffer[] = [];
+  for await (const chunk of stdin) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks).toString("utf8");
 }
 
 function writeCliError(io: CliIo, error: unknown): void {

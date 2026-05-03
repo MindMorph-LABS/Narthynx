@@ -59,6 +59,30 @@ describe("Narthynx CLI", () => {
     expect(result.stdout).toContain("Workspace is healthy");
   });
 
+  it("validates triggers.yaml via triggers doctor", async () => {
+    const cwd = await tempWorkspaceRoot();
+    await runCli(["init"], { cwd });
+    const noRules = await runCli(["triggers", "doctor"], { cwd });
+    expect(noRules.exitCode).toBe(1);
+    expect(noRules.stderr + noRules.stdout).toMatch(/triggers\.yaml/i);
+
+    const triggersText = `version: 1
+rules:
+  - id: t1
+    source: github
+    match: {}
+    action:
+      type: create_mission
+      goalTemplate: "x"
+    dedupKeyFrom:
+      - "k"
+`;
+    await writeFile(path.join(cwd, ".narthynx", "triggers.yaml"), triggersText, "utf8");
+    const ok = await runCli(["triggers", "doctor"], { cwd });
+    expect(ok.exitCode).toBe(0);
+    expect(ok.stdout).toContain("triggers.yaml OK");
+  });
+
   it("creates a mission from the CLI", async () => {
     const cwd = await tempWorkspaceRoot();
     await runCli(["init"], { cwd });

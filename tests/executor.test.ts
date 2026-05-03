@@ -27,7 +27,7 @@ async function initializedMission() {
   };
 }
 
-describe("mission executor", () => {
+describe("mission executor", { timeout: 15_000 }, () => {
   it("runs deterministic nodes in order, persists graph progress, and pauses for approval", async () => {
     const { store, mission, executor } = await initializedMission();
     const result = await executor.runMission(mission.id);

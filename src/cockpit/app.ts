@@ -13,10 +13,18 @@ export interface CreateCockpitAppOptions {
   bearerToken: string;
   /** When true, bind may be 0.0.0.0 and CORS allows any origin (no credentials). */
   allowLan: boolean;
+  /** HMAC secret for `POST /api/triggers/github` (env `NARTHYNX_TRIGGER_GITHUB_SECRET` if omitted). */
+  githubWebhookSecret?: string;
 }
+
+import { handleGithubTriggerWebhook } from "../triggers/http-github";
 
 export function createCockpitApp(options: CreateCockpitAppOptions): Hono {
   const { cwd, staticRoot, bearerToken, allowLan } = options;
+  const githubSecret =
+    options.githubWebhookSecret?.trim() ||
+    process.env.NARTHYNX_TRIGGER_GITHUB_SECRET?.trim() ||
+    "";
 
   const app = new Hono();
 
@@ -26,12 +34,24 @@ export function createCockpitApp(options: CreateCockpitAppOptions): Hono {
       cors({
         origin: "*",
         allowMethods: ["GET", "POST", "OPTIONS"],
-        allowHeaders: ["Authorization", "Content-Type"]
+        allowHeaders: [
+          "Authorization",
+          "Content-Type",
+          "X-Hub-Signature-256",
+          "X-GitHub-Event",
+          "X-GitHub-Delivery"
+        ]
       })
     );
   }
 
+  app.post("/api/triggers/github", (c) => handleGithubTriggerWebhook(cwd, c, githubSecret));
+
   app.use("/api/*", async (c, next) => {
+    if (c.req.method === "POST" && c.req.path === "/api/triggers/github") {
+      await next();
+      return;
+    }
     const auth = c.req.header("Authorization");
     if (auth !== `Bearer ${bearerToken}`) {
       return c.json({ error: "Unauthorized", code: "unauthorized" }, 401);
