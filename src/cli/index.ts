@@ -33,6 +33,7 @@ import { createToolRegistry } from "../tools/registry";
 import { cacheEntryFresh, readMcpToolsCache } from "../tools/mcp-cache";
 import { isMcpServerPolicyAllowed } from "../tools/mcp-guard";
 import { createToolRunner } from "../tools/runner";
+import { registerDaemonCommands } from "./daemon";
 
 export const VERSION = "0.1.0";
 
@@ -59,7 +60,8 @@ export const CLI_COMMANDS = [
   "replay",
   "doctor",
   "triggers",
-  "vault"
+  "vault",
+  "daemon"
 ] as const;
 
 export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
@@ -88,6 +90,7 @@ export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
     | "doctor"
     | "triggers"
     | "vault"
+    | "daemon"
   > =>
     name !== "init" &&
     name !== "mission" &&
@@ -111,7 +114,8 @@ export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
     name !== "replay" &&
     name !== "doctor" &&
     name !== "triggers" &&
-    name !== "vault"
+    name !== "vault" &&
+    name !== "daemon"
 );
 
 export interface CliResult {
@@ -823,6 +827,8 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
         writeCliError(io, error);
       }
     });
+
+  registerDaemonCommands(program, io, cwd);
 
   program
     .command("cockpit")

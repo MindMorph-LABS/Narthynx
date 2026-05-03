@@ -37,7 +37,14 @@ export const policySchema = z.object({
   /** Per-mission encrypted vault reads (`vault.read`). Default block. */
   vault: z.enum(["block", "ask", "allow"]).default("block"),
   /** When set, only these `owner/repo` refs (case-insensitive) may be targeted by github.* tools. */
-  github_repos_allow: z.array(z.string().min(1)).optional()
+  github_repos_allow: z.array(z.string().min(1)).optional(),
+  /**
+   * What the localhost daemon may schedule in the background.
+   * High-risk tools still require human approval via the mission approval gate.
+   */
+  daemon_background_actions: z
+    .enum(["observe_only", "draft_and_notify", "allow_low_risk_automation"])
+    .default("draft_and_notify")
 });
 
 export type WorkspaceConfig = z.infer<typeof configSchema>;

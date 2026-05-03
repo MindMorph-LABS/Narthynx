@@ -1,10 +1,48 @@
-# Narthynx
 
-Narthynx is a local-first Mission Agent OS.
+<p align="center">
+  <img src="./assets/brand/narthynx-logo-lockup-dark.svg" alt="Narthynx — Local-first Mission Agent OS" width="720" />
+</p>
 
-An AI agent that runs missions, not chats. Persistent missions. Approval-gated actions. Replayable execution.
+<h1 align="center">Narthynx</h1>
+
+<p align="center">
+  <strong>Local-first Mission Agent OS.</strong><br />
+  An AI runtime that runs <strong>missions</strong>, not chats—persistent plans, approval-gated actions, replayable execution.
+</p>
+
+<p align="center">
+  <img alt="Open Source" src="https://img.shields.io/badge/open--source-friendly-00E5FF?style=flat-square&labelColor=0D1117">
+  <img alt="Terminal Native" src="https://img.shields.io/badge/terminal-native-00E5FF?style=flat-square&labelColor=0D1117">
+  <img alt="Local First" src="https://img.shields.io/badge/local-first-00E5FF?style=flat-square&labelColor=0D1117">
+  <a href="LICENSE"><img alt="License Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-00E5FF?style=flat-square&labelColor=0D1117"></a>
+  <a href="package.json"><img alt="Node 20+" src="https://img.shields.io/badge/node-%3E%3D20-00E5FF?style=flat-square&labelColor=0D1117"></a>
+  <a href="package.json"><img alt="pnpm" src="https://img.shields.io/badge/pnpm-10-00E5FF?style=flat-square&labelColor=0D1117"></a>
+  <a href="https://github.com/MindMorph-LABS/Narthynx/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/MindMorph-LABS/Narthynx/actions/workflows/ci.yml/badge.svg"></a>
+</p>
 
 > The next SOTA agent is not a better chatbot. It is a mission runtime.
+
+## Contents
+
+- [Why Narthynx Exists](#why-narthynx-exists)
+- [Current Status](#current-status)
+- [What Narthynx Is](#what-narthynx-is)
+- [What Narthynx Is Not](#what-narthynx-is-not)
+- [Requirements](#requirements)
+- [Install](#install)
+- [Quickstart](#quickstart)
+- [Interactive Mode](#interactive-mode)
+- [Command Reference](#command-reference)
+- [Architecture](#architecture)
+- [Safety Model](#safety-model)
+- [Model Providers](#model-providers)
+- [Brand and visual assets](#brand-and-visual-assets)
+- [Examples](#examples)
+- [Development](#development)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+- [Security](#security)
+- [License](#license)
 
 ## Why Narthynx Exists
 
@@ -32,39 +70,37 @@ Implemented:
 - Bounded mission executor vertical slice with read-only steps, approval pause/resume, final reports, and replay.
 - Open-source polish docs, examples, templates, and release checklist.
 - Phase 15 Mission Kit: templates, context diet (`context.md` / `context.json`), and local proof cards.
+- **Phase 15d:** encrypted per-mission vault (`narthynx vault`, `vault.read`, policy `vault`) — see [`docs/vault.md`](docs/vault.md).
 
 Narthynx intentionally fails honestly for behavior outside the current runtime. It does not pretend later-phase integrations exist.
 
 ## What Narthynx Is
 
-- A local-first mission runtime for agent work.
-- A CLI-first system for durable, inspectable missions.
-- A safety-oriented runtime where policy and approvals are core behavior.
-- An open-source infrastructure project built in small, testable phases.
+| Aspect | Description |
+| --- | --- |
+| **Runtime** | Local-first mission runtime for agent work |
+| **Interface** | CLI-first, durable and inspectable missions |
+| **Safety** | Policy and approvals are core product behavior, not add-ons |
+| **Engineering** | Open-source infrastructure built in small, testable phases |
 
 ## What Narthynx Is Not
 
-Narthynx is not:
-
-- a generic chatbot
-- an OpenClaw clone
-- a coding-agent clone
-- a browser-only automation tool
-- a LangChain wrapper
-- a skill marketplace
-- an integration zoo
-- an unsafe automation runner
+Narthynx is not a generic chatbot, an OpenClaw clone, a coding-agent clone, a browser-only automation tool, a LangChain wrapper, a skill marketplace, an integration zoo, or an unsafe automation runner.
 
 ## Requirements
 
 - Node.js 20+
 - pnpm 10+
 
+<p align="center">
+  <img src="./assets/brand/narthynx-cli-card.svg" alt="Narthynx CLI — mission-native terminal experience" width="620" />
+</p>
+
 ## Install
 
 ```bash
-git clone https://github.com/MindMorph-LABS/Narthyx.git
-cd Narthyx
+git clone https://github.com/MindMorph-LABS/Narthynx.git
+cd Narthynx
 pnpm install
 pnpm build
 pnpm test
@@ -273,15 +309,15 @@ NARTHYNX_OPENAI_MODEL=...
 
 Cloud model calls require `allow_network: true` in `policy.yaml`. Sensitive context is blocked or refused unless policy explicitly allows it, and secrets are not persisted to mission files.
 
-## Visual Assets
+## Brand and visual assets
 
-Phase 14 reserves space for public launch visuals without faking them:
+Official logos, icons, and CLI artwork live in **[`assets/brand/`](assets/brand/)**. See **[`assets/brand/BRAND_USAGE.md`](assets/brand/BRAND_USAGE.md)** for filenames and embedding guidance (including a light-background lockup variant when needed).
 
-- `docs/assets/demo-flow-placeholder.md` describes the intended terminal GIF.
-- `docs/assets/report-placeholder.md` describes the intended report screenshot.
-- `docs/assets/replay-placeholder.md` describes the intended replay screenshot.
+**Placeholder captures** (replace with real screenshots or GIFs from the quickstart when ready):
 
-Replace these placeholders only with real captures from the documented quickstart flow.
+- [`docs/assets/demo-flow-placeholder.md`](docs/assets/demo-flow-placeholder.md) — terminal flow GIF.
+- [`docs/assets/report-placeholder.md`](docs/assets/report-placeholder.md) — report screenshot.
+- [`docs/assets/replay-placeholder.md`](docs/assets/replay-placeholder.md) — replay screenshot.
 
 ## Examples
 
@@ -317,18 +353,16 @@ Phase 15 Mission Kit and Phase 15.5 interactive shell UX are shipped. The MVP tr
 
 **GitHub (REST)** — optional `.narthynx/github.yaml`, typed `github.*` tools, `GITHUB_TOKEN` / `GH_TOKEN`; see [`docs/connectors.md`](docs/connectors.md).
 
-Post-MVP exploration:
+**Encrypted mission vault** (Phase 15d) is shipped — [`docs/vault.md`](docs/vault.md).
 
-- local web cockpit
-- visual mission graph
-- advanced browser features (session reuse, CDP)
-- deeper GitHub (GitHub App, GraphQL) beyond REST v1
-- deeper context diet / memory engine
-- cloud/local hybrid execution
-- safe team collaboration
-- Phase 15d encrypted mission vault (CLI `narthynx vault`, tool `vault.read`, **`docs/vault.md`**)
+Post-MVP exploration (see [`docs/roadmap.md`](docs/roadmap.md) for the full phase table):
 
-See `docs/roadmap.md` for the phase table.
+- Deeper local web cockpit and visual mission graph polish
+- Advanced browser features (session reuse, CDP) and MCP transports beyond stdio
+- Deeper GitHub (GitHub App, GraphQL) beyond REST v1
+- Deeper context diet / memory engine
+- Hosted remote mission workers and stronger cloud/local hybrid execution
+- Safe team collaboration (roles, sync beyond ledger attribution)
 
 ## Contributing
 

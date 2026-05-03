@@ -1,7 +1,12 @@
+import { readFile } from "node:fs/promises";
+
 import { loadContextDietConfig } from "../config/context-diet-config";
 import { loadWorkspacePolicy } from "../config/load";
 import { resolveWorkspaceActor } from "../config/identity-config";
 import { doctorWorkspace, resolveWorkspacePaths } from "../config/workspace";
+import { readDaemonPid, isPidRunning } from "../daemon/process-manager";
+import { readDaemonEvents } from "../daemon/event-bus";
+import { readAllQueueOps, deriveQueueFromOps } from "../daemon/queue";
 import { createCostService } from "../agent/cost";
 import { createMissionExecutor } from "../agent/executor";
 import { createModelPlanner } from "../agent/model-planner";
@@ -143,6 +148,12 @@ export async function dispatchSlashCommand(
       return handleToolCommand(command.args, context, stores);
     case "mode":
       return handleModeCommand(command.args, context);
+    case "daemon":
+      return handleDaemonSlash(command.args, context);
+    case "events":
+      return handleDaemonEventsSlash(command.args, context);
+    case "queue":
+      return handleDaemonQueueSlash(context);
     default:
       renderer.warn(
         `Unknown slash command: /${command.name}\n` +
@@ -696,6 +707,66 @@ function parseJsonInput(value: string): unknown {
     const message = error instanceof Error ? error.message : "Invalid JSON";
     throw new Error(`Invalid --input JSON: ${message}`);
   }
+}
+
+async function handleDaemonSlash(args: string[], context: SlashCommandContext): Promise<SlashCommandResult> {
+  const paths = resolveWorkspacePaths(context.cwd);
+  const sub = (args[0] ?? "status").toLowerCase();
+  if (sub !== "status") {
+    context.renderer.warn('Usage: /daemon status — local snapshot from `.narthynx/daemon/`. Start daemon: `narthynx daemon start`.');
+    return stay(context.currentMissionId);
+  }
+
+  const pid = await readDaemonPid(paths);
+  if (pid === null) {
+    context.renderer.info("Daemon: no pid file. Run `narthynx daemon start` (or `--foreground` for this terminal).");
+    return stay(context.currentMissionId);
+  }
+
+  const lines = [`daemon pid: ${pid} (${isPidRunning(pid) ? "running" : "not running"})`];
+  try {
+    const snap = JSON.parse(await readFile(paths.daemonStatusFile, "utf8")) as Record<string, unknown>;
+    lines.push("status.json:\n" + JSON.stringify(snap, null, 2));
+  } catch {
+    lines.push("(no status.json snapshot yet)");
+  }
+  context.renderer.info(lines.join("\n"));
+  return stay(context.currentMissionId);
+}
+
+async function handleDaemonEventsSlash(args: string[], context: SlashCommandContext): Promise<SlashCommandResult> {
+  const paths = resolveWorkspacePaths(context.cwd);
+  let since: string | undefined;
+  const si = args.indexOf("--since");
+  if (si !== -1 && args[si + 1]) {
+    since = args[si + 1];
+  }
+  const events = await readDaemonEvents(paths, { since, limit: 50 });
+  if (events.length === 0) {
+    context.renderer.info("No daemon events in window (events.jsonl).");
+    return stay(context.currentMissionId);
+  }
+  const text = events.map((e) => `${e.ts}  ${e.type}  ${e.summary}`).join("\n");
+  context.renderer.info(`Recent daemon events (${events.length}):\n${text}`);
+  return stay(context.currentMissionId);
+}
+
+async function handleDaemonQueueSlash(context: SlashCommandContext): Promise<SlashCommandResult> {
+  const paths = resolveWorkspacePaths(context.cwd);
+  const ops = await readAllQueueOps(paths);
+  const snap = deriveQueueFromOps(ops);
+  const lines = [
+    `pending: ${snap.pending.length}`,
+    snap.processing ? `processing: ${snap.processing.id} (${snap.processing.job.kind})` : "processing: (none)"
+  ];
+  for (const p of snap.pending.slice(0, 12)) {
+    lines.push(`  - ${p.id}  ${p.job.kind}`);
+  }
+  if (snap.pending.length > 12) {
+    lines.push(`  … ${snap.pending.length - 12} more`);
+  }
+  context.renderer.info(lines.join("\n"));
+  return stay(context.currentMissionId);
 }
 
 function handleModeCommand(args: string[], context: SlashCommandContext): SlashCommandResult {

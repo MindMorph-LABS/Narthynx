@@ -35,6 +35,17 @@ export interface WorkspacePaths {
   mcpCacheDir: string;
   missionsDir: string;
   vaultKdfSaltFile: string;
+  /** `.narthynx/daemon` — Frontier F16 supervisor state */
+  daemonDir: string;
+  daemonLockFile: string;
+  daemonPidFile: string;
+  daemonStatusFile: string;
+  daemonEventsFile: string;
+  daemonQueueFile: string;
+  daemonScheduleFile: string;
+  daemonScheduleStateFile: string;
+  daemonLogFile: string;
+  daemonTokenFile: string;
 }
 
 export interface WorkspaceInitResult {
@@ -60,6 +71,8 @@ export function resolveWorkspacePaths(cwd = process.cwd()): WorkspacePaths {
   const rootDir = path.resolve(cwd);
   const workspaceDir = path.join(rootDir, WORKSPACE_DIR_NAME);
 
+  const daemonDir = path.join(workspaceDir, "daemon");
+
   return {
     rootDir,
     workspaceDir,
@@ -72,7 +85,17 @@ export function resolveWorkspacePaths(cwd = process.cwd()): WorkspacePaths {
     githubFile: path.join(workspaceDir, GITHUB_FILE_NAME),
     mcpCacheDir: path.join(workspaceDir, ".cache", "mcp-tools"),
     missionsDir: path.join(workspaceDir, MISSIONS_DIR_NAME),
-    vaultKdfSaltFile: path.join(workspaceDir, VAULT_KDF_SALT_FILE_NAME)
+    vaultKdfSaltFile: path.join(workspaceDir, VAULT_KDF_SALT_FILE_NAME),
+    daemonDir,
+    daemonLockFile: path.join(daemonDir, "daemon.lock"),
+    daemonPidFile: path.join(daemonDir, "daemon.pid"),
+    daemonStatusFile: path.join(daemonDir, "status.json"),
+    daemonEventsFile: path.join(daemonDir, "events.jsonl"),
+    daemonQueueFile: path.join(daemonDir, "queue.jsonl"),
+    daemonScheduleFile: path.join(daemonDir, "schedule.yaml"),
+    daemonScheduleStateFile: path.join(daemonDir, "schedule-state.json"),
+    daemonLogFile: path.join(daemonDir, "daemon.log"),
+    daemonTokenFile: path.join(daemonDir, "token")
   };
 }
 

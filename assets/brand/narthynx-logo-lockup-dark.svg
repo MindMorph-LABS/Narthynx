@@ -1,0 +1,21 @@
+<svg width="1100" height="320" viewBox="0 0 1100 320" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Narthynx Logo Lockup Dark</title>
+  <desc id="desc">Narthynx logo lockup on a dark repository-ready background.</desc>
+  <rect width="1100" height="320" rx="34" fill="#0D1117"/>
+  <rect x="1.5" y="1.5" width="1097" height="317" rx="32.5" stroke="#293241" stroke-width="3"/>
+  <g transform="translate(42 36) scale(0.48)">
+    <g stroke="#00E5FF" stroke-width="16" stroke-linecap="square" stroke-linejoin="miter">
+      <path d="M104 88V424L218 330"/>
+      <path d="M408 88V424L294 182"/>
+      <path d="M104 88L408 424"/>
+    </g>
+    <g stroke="#00E5FF" stroke-width="12" stroke-linecap="square" stroke-linejoin="miter">
+      <path d="M176 242L336 303"/>
+      <path d="M176 242L130 280"/>
+    </g>
+    <circle cx="176" cy="242" r="16" fill="#0D1117" stroke="#00E5FF" stroke-width="10"/>
+    <circle cx="336" cy="303" r="16" fill="#0D1117" stroke="#00E5FF" stroke-width="10"/>
+  </g>
+  <line x1="330" y1="72" x2="330" y2="248" stroke="#334155" stroke-width="3"/>
+  <text x="386" y="190" fill="#F8FAFC" font-size="66" font-family="Inter, Sora, Arial, sans-serif" font-weight="600" letter-spacing="16">NARTHYNX</text>
+</svg>

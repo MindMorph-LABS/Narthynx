@@ -59,6 +59,14 @@ describe("Narthynx CLI", () => {
     expect(result.stdout).toContain("Workspace is healthy");
   });
 
+  it("daemon status reports absent pid without failure", async () => {
+    const cwd = await tempWorkspaceRoot();
+    await runCli(["init"], { cwd });
+    const result = await runCli(["daemon", "status"], { cwd });
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("No daemon pid file");
+  });
+
   it("validates triggers.yaml via triggers doctor", async () => {
     const cwd = await tempWorkspaceRoot();
     await runCli(["init"], { cwd });
