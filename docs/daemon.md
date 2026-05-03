@@ -74,6 +74,17 @@ All routes require header `Authorization: Bearer <token>`.
 | POST   | `/queue`  | Enqueue job (validated + policy-checked)    |
 | GET    | `/events` | Query `?since=<ISO>` for recent events      |
 
+## Companion reminders (`companion/reminders.jsonl`, Frontier F17)
+
+`/remind` (interactive shell) appends timed rows under `.narthynx/companion/reminders.jsonl`. On each foreground daemon tick (`run.ts`), **due** reminders (pending + `fireAt <= now`) are delivered as:
+
+1. **`notify`** sink emission (visible in daemon log output), and
+2. Daemon event **`companion.reminder.delivered`** appended to `.narthynx/daemon/events.jsonl`.
+
+Companion reminders intentionally **skip** the main FIFO `queue.jsonl` so unrelated jobs cannot be blocked waiting on a deferred clock row.
+
+Without a running daemon, reminders stay **pending**; the CLI states this explicitly after scheduling.
+
 ## Limitations (honest)
 
 - Single worker process; **no clustered daemon**.

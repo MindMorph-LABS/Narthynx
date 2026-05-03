@@ -127,13 +127,25 @@ export function createModelRouter(options: ModelRouterOptions = {}): ModelRouter
           sensitiveContextIncluded: parsedRequest.sensitiveContextIncluded,
           provider,
           policy: policy.value,
-          packSummary: extractPackSummary(parsedRequest.input)
+          packSummary: extractPackSummary(parsedRequest.input),
+          sensitiveContextPolicyOverride:
+            parsedRequest.task === "companion_chat"
+              ? policy.value.companion_cloud_context
+              : policy.value.cloud_model_sensitive_context
         });
         if (consent.approvalId) {
           consentApprovalId = consent.approvalId;
         }
 
-        enforcePolicy(provider, parsedRequest.sensitiveContextIncluded, policy.value, consent.verified);
+        enforcePolicy(
+          provider,
+          parsedRequest.sensitiveContextIncluded,
+          policy.value,
+          consent.verified,
+          parsedRequest.task === "companion_chat"
+            ? policy.value.companion_cloud_context
+            : policy.value.cloud_model_sensitive_context
+        );
 
         try {
           const response = modelCallResponseSchema.parse(await provider.call(parsedRequest));
@@ -226,20 +238,23 @@ async function ensureSensitiveCloudConsent(input: {
   provider: ModelProvider;
   policy: WorkspacePolicy;
   packSummary?: { bytes?: number; estimatedTokens?: number; includedCount?: number };
+  sensitiveContextPolicyOverride: WorkspacePolicy["cloud_model_sensitive_context"];
 }): Promise<{ verified: boolean; approvalId?: string }> {
   if (!input.provider.isNetworked || !input.sensitiveContextIncluded) {
     return { verified: true };
   }
 
-  if (input.policy.cloud_model_sensitive_context === "block") {
+  const mode = input.sensitiveContextPolicyOverride;
+
+  if (mode === "block") {
     return { verified: false };
   }
 
-  if (input.policy.cloud_model_sensitive_context === "allow") {
+  if (mode === "allow") {
     return { verified: true };
   }
 
-  if (input.policy.cloud_model_sensitive_context !== "ask") {
+  if (mode !== "ask") {
     return { verified: true };
   }
 
@@ -293,7 +308,8 @@ function enforcePolicy(
   provider: ModelProvider,
   sensitiveContextIncluded: boolean,
   policy: WorkspacePolicy,
-  sensitiveConsentVerified: boolean
+  sensitiveConsentVerified: boolean,
+  sensitiveContextMode: WorkspacePolicy["cloud_model_sensitive_context"]
 ): void {
   if (provider.isNetworked && !policy.allow_network) {
     throw new ModelProviderError(
@@ -306,11 +322,11 @@ function enforcePolicy(
     return;
   }
 
-  if (policy.cloud_model_sensitive_context === "block") {
+  if (sensitiveContextMode === "block") {
     throw new ModelProviderError("Sensitive context is blocked by policy cloud_model_sensitive_context: block.", "sensitive_blocked");
   }
 
-  if (policy.cloud_model_sensitive_context === "ask" && !sensitiveConsentVerified) {
+  if (sensitiveContextMode === "ask" && !sensitiveConsentVerified) {
     throw new ModelProviderError(
       "Sensitive context to a networked model requires an approved consent (cloud_model_sensitive_context: ask).",
       "sensitive_requires_approval"

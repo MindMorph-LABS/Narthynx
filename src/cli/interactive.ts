@@ -6,6 +6,9 @@ import { loadWorkspacePolicy } from "../config/load";
 import { resolveWorkspacePaths } from "../config/workspace";
 import { createMissionExecutor } from "../agent/executor";
 import { createMissionStore } from "../missions/store";
+import { createApprovalStore } from "../missions/approvals";
+import { appendPendingMemoryProposal } from "../memory/relationship-memory";
+import { runCompanionChatTurn } from "../companion/chat";
 import type { Mission } from "../missions/schema";
 import { readApprovalKeyChoice } from "./approval-keypress";
 import { handleNaturalLanguageInstruction } from "./natural-language";
@@ -291,7 +294,8 @@ async function writeStatusLine(session: InteractiveSessionState, renderer: Rende
     cockpitMode: session.cockpitMode,
     mission,
     policyMode: policy.ok ? policy.value.mode : undefined,
-    modelLabel: resolveModelLabel()
+    modelLabel: resolveModelLabel(),
+    companionSurfaceActive: session.companionSurfaceActive
   });
 }
 
@@ -303,6 +307,18 @@ async function readCurrentMission(cwd: string, currentMissionId: string | undefi
   return createMissionStore(cwd)
     .readMission(currentMissionId)
     .catch(() => undefined);
+}
+
+async function handleCompanionNaturalLine(session: InteractiveSessionState, renderer: Renderer, text: string): Promise<void> {
+  const approvalStore = createApprovalStore(session.cwd);
+  const sessionId = session.companionSessionId.trim().length > 0 ? session.companionSessionId : "default";
+  const result = await runCompanionChatTurn({
+    cwd: session.cwd,
+    sessionId,
+    userMessage: text,
+    approvalStore
+  });
+  renderer.info(result.assistantText);
 }
 
 interface LineOutcome {
@@ -319,7 +335,11 @@ async function handleInteractiveLine(line: string, session: InteractiveSessionSt
 
   if (routed.kind === "natural") {
     try {
-      await handleNaturalLanguageInstruction({ text: routed.text, session, renderer });
+      if (session.companionSurfaceActive) {
+        await handleCompanionNaturalLine(session, renderer, routed.text);
+      } else {
+        await handleNaturalLanguageInstruction({ text: routed.text, session, renderer });
+      }
       return { exit: false };
     } catch (error) {
       session.exitCode = 1;
@@ -379,6 +399,14 @@ async function handleInteractiveLine(line: string, session: InteractiveSessionSt
   if (routed.kind === "note") {
     try {
       const note = parseHashShortcut(routed.raw);
+      if (session.companionSurfaceActive && /^remember(?:\s|:)/i.test(note)) {
+        const paths = resolveWorkspacePaths(session.cwd);
+        const textPart = note.replace(/^remember:?\s*/i, "").trim();
+        const rec = await appendPendingMemoryProposal(paths, textPart || note, session.companionSessionId);
+        renderer.info(`Memory proposal queued: ${rec.id} — use "/memory approve ${rec.id}" after review.`);
+        return { exit: false };
+      }
+
       if (!session.currentMissionId) {
         if (workspaceNoteLooksSensitive(note)) {
           renderer.warn(

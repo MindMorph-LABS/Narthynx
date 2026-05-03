@@ -6,7 +6,9 @@ export const modelTaskSchema = z.enum([
   "file_summarization",
   "tool_argument_drafting",
   "risk_classification",
-  "final_report"
+  "final_report",
+  /** Frontier F17 — conversational companion; JSON-only structured output */
+  "companion_chat"
 ]);
 
 export const modelUsageSchema = z.object({

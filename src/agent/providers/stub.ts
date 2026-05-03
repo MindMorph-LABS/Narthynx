@@ -6,6 +6,11 @@ export interface StubPlanningInput {
   mission: Pick<Mission, "id" | "title" | "goal" | "successCriteria">;
 }
 
+interface CompanionTurnInputEnvelope {
+  userMessage?: string;
+  personaName?: string;
+}
+
 export function createStubModelProvider(): ModelProvider {
   return {
     name: "stub",
@@ -34,6 +39,10 @@ export function createStubModelProvider(): ModelProvider {
 }
 
 function renderStubContent(request: ModelCallRequest): string {
+  if (request.task === "companion_chat") {
+    return renderCompanionStubContent(request.input);
+  }
+
   if (request.task === "planning") {
     const input = request.input as Partial<StubPlanningInput>;
     if (input.mission?.id && input.mission.title && input.mission.goal && input.mission.successCriteria) {
@@ -64,4 +73,46 @@ function renderStubContent(request: ModelCallRequest): string {
     task: request.task,
     message: "Deterministic stub response. No model provider or network call was used."
   });
+}
+
+/** Deterministic heuristic companion replies for offline CI (`companion_mode: local_stub`). */
+function renderCompanionStubContent(input: unknown): string {
+  const env =
+    typeof input === "object" && input !== null
+      ? (input as Record<string, unknown>).companionEnvelope
+      : undefined;
+  let text = "";
+  if (typeof env === "object" && env !== null) {
+    const u = (env as CompanionTurnInputEnvelope).userMessage;
+    text = typeof u === "string" ? u.trim().toLowerCase() : "";
+  }
+
+  const name =
+    typeof env === "object" && env !== null && typeof (env as CompanionTurnInputEnvelope).personaName === "string"
+      ? (env as CompanionTurnInputEnvelope).personaName
+      : "Companion";
+
+  let payload: Record<string, unknown> = {
+    reply: `${name}: I'm running in local stub mode (no cloud model). Type goals naturally; I'll suggest missions when appropriate.`
+  };
+
+  const wantsMission =
+    text.includes("create") && text.includes("mission") && !text.includes("remember");
+  if (wantsMission || text.includes("fix bug")) {
+    payload = {
+      reply:
+        "I captured a tentative goal. Confirm with /mission <goal> after reviewing, or use /mission-from-chat create to materialize.",
+      suggestMission: {
+        title: "Companion draft",
+        goal: "Implement the next concrete Narthynx improvement the user requested."
+      }
+    };
+  } else if (text.startsWith("remember:")) {
+    payload = {
+      reply: `Noted "${text}". This will be queued as memory pending approval (use companion memory slash commands once saved).`,
+      proposeMemory: { text: text.replace(/^remember:\s*/i, "").trim() || text }
+    };
+  }
+
+  return JSON.stringify(payload);
 }

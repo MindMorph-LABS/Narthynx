@@ -44,7 +44,13 @@ export const policySchema = z.object({
    */
   daemon_background_actions: z
     .enum(["observe_only", "draft_and_notify", "allow_low_risk_automation"])
-    .default("draft_and_notify")
+    .default("draft_and_notify"),
+  /** Frontier F17 Companion — conversational layer (no direct tool execution from companion code). */
+  companion_mode: z.enum(["off", "local_stub", "model"]).default("local_stub"),
+  /** Reserved for future governed read-only context tools; empty array = none (default). */
+  companion_tools: z.array(z.string().min(1)).default([]),
+  /** Sensitive cloud context posture for companion model calls (separate from mission planning). */
+  companion_cloud_context: z.enum(["block", "ask", "allow"]).default("block")
 });
 
 export type WorkspaceConfig = z.infer<typeof configSchema>;

@@ -46,6 +46,16 @@ export interface WorkspacePaths {
   daemonScheduleStateFile: string;
   daemonLogFile: string;
   daemonTokenFile: string;
+  companionDir: string;
+  companionMetaFile: string;
+  companionPersonaFile: string;
+  companionSuggestionsFile: string;
+  companionMemoryDir: string;
+  companionApprovedMemoryFile: string;
+  companionPendingMemoryFile: string;
+  companionRemindersFile: string;
+  companionArtifactsDir: string;
+  companionSessionsDir: string;
 }
 
 export interface WorkspaceInitResult {
@@ -72,6 +82,7 @@ export function resolveWorkspacePaths(cwd = process.cwd()): WorkspacePaths {
   const workspaceDir = path.join(rootDir, WORKSPACE_DIR_NAME);
 
   const daemonDir = path.join(workspaceDir, "daemon");
+  const companionDir = path.join(workspaceDir, "companion");
 
   return {
     rootDir,
@@ -95,7 +106,17 @@ export function resolveWorkspacePaths(cwd = process.cwd()): WorkspacePaths {
     daemonScheduleFile: path.join(daemonDir, "schedule.yaml"),
     daemonScheduleStateFile: path.join(daemonDir, "schedule-state.json"),
     daemonLogFile: path.join(daemonDir, "daemon.log"),
-    daemonTokenFile: path.join(daemonDir, "token")
+    daemonTokenFile: path.join(daemonDir, "token"),
+    companionDir,
+    companionMetaFile: path.join(companionDir, "meta.json"),
+    companionPersonaFile: path.join(companionDir, "persona.yaml"),
+    companionSuggestionsFile: path.join(companionDir, "suggestions.jsonl"),
+    companionMemoryDir: path.join(companionDir, "memory"),
+    companionApprovedMemoryFile: path.join(companionDir, "memory", "approved.jsonl"),
+    companionPendingMemoryFile: path.join(companionDir, "memory", "pending.jsonl"),
+    companionRemindersFile: path.join(companionDir, "reminders.jsonl"),
+    companionArtifactsDir: path.join(companionDir, "artifacts"),
+    companionSessionsDir: path.join(companionDir, "sessions")
   };
 }
 

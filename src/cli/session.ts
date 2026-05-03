@@ -5,6 +5,10 @@ export interface InteractiveSessionState {
   currentMissionId?: string;
   cockpitMode: CockpitMode;
   exitCode: number;
+  /** Default companion transcript session (`default` unless overridden). */
+  companionSessionId: string;
+  /** When true, free-text lines use companion chat instead of mission natural-language planner. */
+  companionSurfaceActive: boolean;
 }
 
 export function createInteractiveSessionState(cwd: string): InteractiveSessionState {
@@ -12,7 +16,9 @@ export function createInteractiveSessionState(cwd: string): InteractiveSessionSt
     cwd,
     currentMissionId: undefined,
     cockpitMode: "ask",
-    exitCode: 0
+    exitCode: 0,
+    companionSessionId: "default",
+    companionSurfaceActive: false
   };
 }
 

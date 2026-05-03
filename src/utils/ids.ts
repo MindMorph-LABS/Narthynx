@@ -31,3 +31,7 @@ export function createDaemonJobId(): string {
 export function createDaemonEventRowId(): string {
   return `de_${randomUUID()}`;
 }
+
+export function createCompanionRowId(prefix: "cmsg" | "csug" | "crm" | "cmem" | "cpend"): string {
+  return `${prefix}_${randomUUID()}`;
+}

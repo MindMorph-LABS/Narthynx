@@ -60,6 +60,7 @@ export function createReadlineRenderer(io: InteractiveIo): Renderer {
       const missionId = params.mission?.id ?? "none";
       const state = params.mission?.state ?? "none";
       const policy = params.policyMode ?? "unknown";
+      const companion = params.companionSurfaceActive ? "  surface: cmp" : "";
       io.writeOut(
         "Narthynx  mode: " +
           cockpit +
@@ -71,6 +72,7 @@ export function createReadlineRenderer(io: InteractiveIo): Renderer {
           policy +
           "  model: " +
           params.modelLabel +
+          companion +
           "\n"
       );
     },
@@ -223,6 +225,14 @@ export function createReadlineRenderer(io: InteractiveIo): Renderer {
           "/daemon status                Daemon snapshot (.narthynx/daemon — see docs/daemon.md)",
           "/events [--since <ISO>]      Recent daemon event log",
           "/queue                        Daemon job queue replay view",
+          "",
+          "Companion (Frontier F17)",
+          "/companion | /companion session <id>",
+          "/companion mission               Back to mission-first planner",
+          "/briefing [--write]              Workspace / mission snapshot text",
+          "/mission-from-chat [draft|accept|materialize]",
+          "/remind +<minutes>|ISO8601 …     Schedule companion reminder",
+          "/memory [approve|reject] <id>    Governed companion memory store",
           "/clear                        Clear terminal (console.clear)",
           "",
           "Session",
@@ -238,7 +248,8 @@ export function createReadlineRenderer(io: InteractiveIo): Renderer {
           "Shortcuts",
           "! <command>                   shell.run (approval-gated)",
           "@ <path>                      Attach file to mission context",
-          "# <note>                      Note (mission or workspace-notes.md)"
+          "# <note>                      Note (mission or workspace-notes.md)",
+          "# remember: …                 In companion surface → memory proposal"
         ].join("\n") + "\n"
       );
     },
