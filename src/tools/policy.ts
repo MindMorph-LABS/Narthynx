@@ -1,5 +1,6 @@
 import type { WorkspacePolicy } from "../config/load";
 import type { RiskLevel } from "../missions/schema";
+import { isBrowserToolName } from "./browser-guard";
 import type { ToolAction, ToolSideEffect } from "./types";
 
 export type ToolPolicyDecision =
@@ -20,6 +21,18 @@ export type ToolPolicyDecision =
     };
 
 export function classifyToolPolicy(tool: ToolAction<unknown, unknown>, policy: WorkspacePolicy): ToolPolicyDecision {
+  if (isBrowserToolName(tool.name)) {
+    if (policy.browser === "block") {
+      return block(tool, "Browser tools are blocked by policy (browser: block).");
+    }
+    if (policy.browser === "ask" && policy.browser_hosts_allow.length === 0) {
+      return block(
+        tool,
+        "Browser tools require at least one entry in browser_hosts_allow when browser is ask."
+      );
+    }
+  }
+
   if (tool.sideEffect === "network" && !policy.allow_network) {
     return block(tool, "Network tools are blocked by default policy.");
   }

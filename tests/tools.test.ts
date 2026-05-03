@@ -35,6 +35,12 @@ describe("tool registry", () => {
     const tools = registry.list();
 
     expect(tools.map((tool) => tool.name)).toEqual([
+      "browser.click",
+      "browser.fill",
+      "browser.navigate",
+      "browser.press",
+      "browser.screenshot",
+      "browser.snapshot",
       "filesystem.list",
       "filesystem.read",
       "filesystem.write",
@@ -49,6 +55,9 @@ describe("tool registry", () => {
     );
     expect(tools.map((tool) => `${tool.name}:${tool.sideEffect}:${tool.riskLevel}:${tool.requiresApproval}`)).toContain(
       "filesystem.write:local_write:high:true"
+    );
+    expect(tools.map((tool) => `${tool.name}:${tool.sideEffect}:${tool.riskLevel}:${tool.requiresApproval}`)).toContain(
+      "browser.navigate:network:high:true"
     );
     expect(tools.map((tool) => `${tool.name}:${tool.sideEffect}:${tool.riskLevel}:${tool.requiresApproval}`)).toContain(
       "shell.run:shell:high:true"

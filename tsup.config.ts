@@ -7,5 +7,6 @@ export default defineConfig({
   dts: true,
   sourcemap: true,
   target: "node20",
-  splitting: false
+  splitting: false,
+  external: ["playwright"]
 });

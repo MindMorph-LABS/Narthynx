@@ -43,7 +43,7 @@ Use focused branches and small commits when possible. A good PR should explain:
 
 The MVP through Phase 14 is implemented. Phase 15 and later work is post-MVP and should not be smuggled into unrelated changes.
 
-Post-MVP integrations such as browser automation, MCP, GitHub, external communication, hosted sync, or team collaboration must wait until they can be implemented as typed tools or services with schemas, policy, approval behavior, ledger events, tests, and honest documentation.
+Post-MVP integrations such as MCP, GitHub, email, calendar, external communication beyond the shipped browser connector, hosted sync, or team collaboration should follow the same pattern: typed tools or services with schemas, policy, approval behavior, ledger events, tests, and honest documentation.
 
 ## Testing Expectations
 

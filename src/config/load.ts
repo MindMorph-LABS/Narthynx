@@ -21,11 +21,19 @@ export const policySchema = z.object({
   }),
   external_communication: z.enum(["block", "ask"]),
   credentials: z.enum(["block", "ask"]),
-  cloud_model_sensitive_context: z.enum(["block", "ask", "allow"])
+  cloud_model_sensitive_context: z.enum(["block", "ask", "allow"]),
+  /** When `block`, browser tools are denied regardless of `allow_network`. */
+  browser: z.enum(["block", "ask"]).default("block"),
+  /** URL prefixes or hostnames allowed for browser tool navigation. Non-empty required when `browser` is `ask` and tools run. */
+  browser_hosts_allow: z.array(z.string().min(1)).default([]),
+  /** Max time (ms) for navigation and Playwright defaults per action. */
+  browser_max_navigation_ms: z.number().int().min(3_000).max(120_000).default(30_000),
+  /** Bound for future multi-step session reuse (v2). */
+  browser_max_steps_per_session: z.number().int().min(1).max(100).default(50)
 });
 
 export type WorkspaceConfig = z.infer<typeof configSchema>;
-export type WorkspacePolicy = z.infer<typeof policySchema>;
+export type WorkspacePolicy = z.output<typeof policySchema>;
 
 export interface ValidationFailure {
   ok: false;
@@ -46,7 +54,11 @@ export async function loadWorkspaceConfig(path: string): Promise<ValidationResul
 }
 
 export async function loadWorkspacePolicy(path: string): Promise<ValidationResult<WorkspacePolicy>> {
-  return loadYamlFile(path, policySchema);
+  const result = await loadYamlFile(path, policySchema);
+  if (!result.ok) {
+    return result;
+  }
+  return { ok: true, path: result.path, value: result.value as WorkspacePolicy };
 }
 
 async function loadYamlFile<T>(path: string, schema: z.ZodSchema<T>): Promise<ValidationResult<T>> {
