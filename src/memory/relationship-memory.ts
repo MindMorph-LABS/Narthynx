@@ -1,11 +1,9 @@
-import { appendFile, readFile, writeFile } from "node:fs/promises";
-
 import { z } from "zod";
 
+import { loadWorkspacePolicy } from "../config/load";
 import type { WorkspacePaths } from "../config/workspace";
-import { createCompanionRowId } from "../utils/ids";
-import { appendApprovedMemory } from "./user-memory";
-import { ensureCompanionDirs } from "../companion/store";
+import { appendMemoryProposal, approveMemoryProposal, listPendingProposals, rejectMemoryProposal } from "./proposals";
+import type { MemoryProposalStored } from "./schema";
 
 const pendingMemorySchema = z.object({
   id: z.string(),
@@ -16,72 +14,49 @@ const pendingMemorySchema = z.object({
 });
 export type PendingMemoryProposal = z.infer<typeof pendingMemorySchema>;
 
-async function readPendingFile(paths: WorkspacePaths): Promise<PendingMemoryProposal[]> {
-  let raw = "";
-  try {
-    raw = await readFile(paths.companionPendingMemoryFile, "utf8");
-  } catch (e) {
-    const code = e instanceof Error && "code" in e ? String((e as NodeJS.ErrnoException).code) : "";
-    if (code === "ENOENT") {
-      return [];
-    }
-    throw e;
+async function requirePolicy(paths: WorkspacePaths) {
+  const r = await loadWorkspacePolicy(paths.policyFile);
+  if (!r.ok) {
+    throw new Error(`policy.yaml invalid: ${r.message}`);
   }
-  const out: PendingMemoryProposal[] = [];
-  for (const line of raw.split(/\r?\n/).filter(Boolean)) {
-    try {
-      const r = pendingMemorySchema.safeParse(JSON.parse(line));
-      if (r.success) {
-        out.push(r.data);
-      }
-    } catch {
-      /* skip */
-    }
-  }
-  return out.sort((a, b) => b.ts.localeCompare(a.ts));
+  return r.value;
 }
 
-async function persistPending(paths: WorkspacePaths, rows: PendingMemoryProposal[]): Promise<void> {
-  await writeFile(paths.companionPendingMemoryFile, `${rows.map((r) => JSON.stringify(r)).join("\n")}\n`, "utf8");
+function mapToPendingLegacy(p: MemoryProposalStored): PendingMemoryProposal {
+  return {
+    id: p.id,
+    ts: p.updated_at,
+    text: p.text,
+    sessionId: p.source.companion_session_id,
+    status: p.status === "pending" ? "pending" : p.status === "approved" ? "approved" : "rejected"
+  };
 }
 
 export async function listPendingMemoryProposals(paths: WorkspacePaths): Promise<PendingMemoryProposal[]> {
-  return (await readPendingFile(paths)).filter((r) => r.status === "pending");
+  const rows = await listPendingProposals(paths);
+  return rows.map((p) => ({ ...mapToPendingLegacy(p), status: "pending" as const }));
 }
 
-export async function appendPendingMemoryProposal(paths: WorkspacePaths, text: string, sessionId?: string): Promise<PendingMemoryProposal> {
-  await ensureCompanionDirs(paths);
-  const row: PendingMemoryProposal = pendingMemorySchema.parse({
-    id: createCompanionRowId("cpend"),
-    ts: new Date().toISOString(),
-    text: text.trim(),
-    sessionId,
-    status: "pending"
+export async function appendPendingMemoryProposal(
+  paths: WorkspacePaths,
+  text: string,
+  sessionId?: string
+): Promise<PendingMemoryProposal> {
+  const policy = await requirePolicy(paths);
+  const stored = await appendMemoryProposal(paths, {
+    scope: "relationship",
+    text,
+    source: { kind: "companion_explicit", companion_session_id: sessionId, citation: "companion.proposeMemory" },
+    policy
   });
-  await appendFile(paths.companionPendingMemoryFile, `${JSON.stringify(row)}\n`, "utf8");
-  return row;
+  return { ...mapToPendingLegacy(stored), status: "pending" };
 }
 
 export async function approvePendingMemoryProposal(paths: WorkspacePaths, id: string): Promise<boolean> {
-  const rows = await readPendingFile(paths);
-  const idx = rows.findIndex((r) => r.id === id && r.status === "pending");
-  if (idx < 0) {
-    return false;
-  }
-  const match = rows[idx]!;
-  await appendApprovedMemory(paths, match.text);
-  rows[idx] = { ...match, status: "approved" };
-  await persistPending(paths, rows);
-  return true;
+  const policy = await requirePolicy(paths);
+  return approveMemoryProposal(paths, id, policy);
 }
 
 export async function rejectPendingMemoryProposal(paths: WorkspacePaths, id: string): Promise<boolean> {
-  const rows = await readPendingFile(paths);
-  const idx = rows.findIndex((r) => r.id === id && r.status === "pending");
-  if (idx < 0) {
-    return false;
-  }
-  rows[idx] = { ...rows[idx]!, status: "rejected" };
-  await persistPending(paths, rows);
-  return true;
+  return rejectMemoryProposal(paths, id);
 }

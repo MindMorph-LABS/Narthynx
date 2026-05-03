@@ -25,11 +25,9 @@ import { buildDailyBriefingText, writeDailyBriefingArtifact } from "../companion
 import { materializeCompanionMissionDraft, buildMissionDraftFromCompanionChat } from "../companion/chat";
 import { acceptLatestProposedMissionSuggestion } from "../companion/mission-suggestions";
 import { appendCompanionReminder, parseRemindFireAt } from "../companion/reminders";
-import {
-  approvePendingMemoryProposal,
-  listPendingMemoryProposals,
-  rejectPendingMemoryProposal
-} from "../memory/relationship-memory";
+import { detectMemoryConflicts, listOpenMemoryConflicts } from "../memory/conflicts";
+import { approveMemoryProposal, listPendingProposals, rejectMemoryProposal } from "../memory/proposals";
+import { listActiveMemoryItems, listMemoryRevisionLineage } from "../memory/store";
 import { listApprovedMemory } from "../memory/user-memory";
 import type { Renderer } from "./renderer";
 import { isCockpitMode, type InteractiveSessionState } from "./session";
@@ -897,29 +895,98 @@ async function handleRemindSlash(args: string[], context: SlashCommandContext): 
 
 async function handleCompanionMemorySlash(args: string[], context: SlashCommandContext): Promise<SlashCommandResult> {
   const paths = resolveWorkspacePaths(context.cwd);
+  const policy = await loadWorkspacePolicy(paths.policyFile);
+  if (!policy.ok) {
+    context.renderer.renderError(`policy.yaml invalid: ${policy.message}`);
+    return stay(context.currentMissionId);
+  }
+
   const sub = args[0]?.toLowerCase();
 
-  if (sub === "approve" && args[1]) {
-    const ok = await approvePendingMemoryProposal(paths, args[1]!);
-    context.renderer.info(ok ? `Approved memory proposal ${args[1]}.` : `No pending proposal ${args[1]}.`);
+  if (sub === "approve") {
+    const id = args[1];
+    if (!id) {
+      context.renderer.warn("Usage: /memory approve <proposalId>");
+      return stay(context.currentMissionId);
+    }
+    const ok = await approveMemoryProposal(paths, id, policy.value);
+    context.renderer.info(ok ? `Approved memory proposal ${id}.` : `No pending proposal ${id}.`);
     return stay(context.currentMissionId);
   }
 
-  if (sub === "reject" && args[1]) {
-    const ok = await rejectPendingMemoryProposal(paths, args[1]!);
-    context.renderer.info(ok ? `Rejected proposal ${args[1]}.` : `No pending proposal ${args[1]}.`);
+  if (sub === "reject") {
+    const id = args[1];
+    if (!id) {
+      context.renderer.warn("Usage: /memory reject <proposalId>");
+      return stay(context.currentMissionId);
+    }
+    const ok = await rejectMemoryProposal(paths, id);
+    context.renderer.info(ok ? `Rejected proposal ${id}.` : `No pending proposal ${id}.`);
     return stay(context.currentMissionId);
   }
 
-  const pending = await listPendingMemoryProposals(paths);
+  if (sub === "conflicts") {
+    const open = await listOpenMemoryConflicts(paths);
+    const items = await listActiveMemoryItems(paths);
+    const pairs = detectMemoryConflicts(items);
+    const lines = [
+      "Memory conflicts",
+      "",
+      `Open recorded: ${open.length}`,
+      ...open.map((c) => `  ${c.id}: ${c.item_ids.join(" vs ")}`),
+      "",
+      `Heuristic overlaps (not auto-recorded): ${pairs.length}`,
+      ...pairs.slice(0, 12).map(
+        (p) => `  ${p.similarity.toFixed(2)}  ${p.a.id} <> ${p.b.id}`
+      )
+    ];
+    if (pairs.length > 12) {
+      lines.push(`  …and ${pairs.length - 12} more`);
+    }
+    context.renderer.info(lines.join("\n"));
+    return stay(context.currentMissionId);
+  }
+
+  if (sub === "diff") {
+    const a = args[1];
+    const b = args[2];
+    if (!a || !b) {
+      context.renderer.warn("Usage: /memory diff <itemIdA> <itemIdB>");
+      return stay(context.currentMissionId);
+    }
+    const left = await listMemoryRevisionLineage(paths, a);
+    const right = await listMemoryRevisionLineage(paths, b);
+    if (left.length === 0 || right.length === 0) {
+      context.renderer.warn("One or both ids have no stored revisions.");
+      return stay(context.currentMissionId);
+    }
+    const la = left[left.length - 1]!;
+    const rb = right[right.length - 1]!;
+    context.renderer.panel(
+      "Memory diff (latest revisions)",
+      `--- ${a} (${la.updated_at})\n${la.text}\n\n--- ${b} (${rb.updated_at})\n${rb.text}`
+    );
+    return stay(context.currentMissionId);
+  }
+
+  if (sub && !["approve", "reject", "conflicts", "diff", "list"].includes(sub)) {
+    context.renderer.warn(
+      `Unknown /memory subcommand "${sub}". Try /memory, /memory list, /memory approve <id>, /memory conflicts, /memory diff <a> <b>.`
+    );
+    return stay(context.currentMissionId);
+  }
+
+  const pendingRows = await listPendingProposals(paths);
   const approved = await listApprovedMemory(paths);
   const lines = [
-    "Companion memory",
+    "Governed memory (F18)",
     "",
     "Pending proposals:",
-    ...pending.map((p) => `  ${p.id}  ${p.ts}  ${p.text.slice(0, 120)}${p.text.length > 120 ? "…" : ""}`),
+    ...pendingRows.map(
+      (p) => `  ${p.id}  ${p.updated_at}  ${p.text.slice(0, 120)}${p.text.length > 120 ? "…" : ""}`
+    ),
     "",
-    "Approved entries:",
+    "Approved snippets (user + relationship scopes):",
     ...approved.slice(0, 20).map((a) => `  ${a.id}  ${a.ts}  ${a.text.slice(0, 120)}${a.text.length > 120 ? "…" : ""}`)
   ];
   context.renderer.info(lines.join("\n"));

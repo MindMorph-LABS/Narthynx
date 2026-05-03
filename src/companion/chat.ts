@@ -4,7 +4,7 @@ import { createMissionStore } from "../missions/store";
 import { createStubModelProvider } from "../agent/providers/stub";
 import type { ApprovalStore } from "../missions/approvals";
 import { createModelRouter } from "../agent/model-router";
-import { approvedMemorySnippetForModel } from "../memory/user-memory";
+import { approvedMemorySnippetForModel } from "../memory/retrieval";
 import { appendPendingMemoryProposal } from "../memory/relationship-memory";
 import { ensureCompanionHostMissionId } from "./host-mission";
 import { parseCompanionStructuredOutput } from "./parse-output";
@@ -118,8 +118,15 @@ export async function runCompanionChatTurn(input: CompanionTurnInput): Promise<C
       goal: structured.suggestMission.goal
     });
   }
+  let queuedMemory = false;
+  let memoryPersistError: string | undefined;
   if (structured.proposeMemory?.text.trim()) {
-    await appendPendingMemoryProposal(paths, structured.proposeMemory.text.trim(), input.sessionId);
+    try {
+      await appendPendingMemoryProposal(paths, structured.proposeMemory.text.trim(), input.sessionId);
+      queuedMemory = true;
+    } catch (e) {
+      memoryPersistError = e instanceof Error ? e.message : String(e);
+    }
   }
 
   const assistantText =
@@ -127,7 +134,8 @@ export async function runCompanionChatTurn(input: CompanionTurnInput): Promise<C
     (structured.suggestMission
       ? `\n\n(Suggested mission recorded — confirm with \`/mission-from-chat create\` or run \`/mission\` manually.)`
       : "") +
-    (structured.proposeMemory?.text.trim() ? `\n\n(Memory proposal queued pending approval — \`/memory list\`.)` : "");
+    (queuedMemory && !memoryPersistError ? `\n\n(Memory proposal queued pending approval — \`/memory\`.)` : "") +
+    (memoryPersistError ? `\n\n(Memory proposal not saved: ${memoryPersistError})` : "");
 
   const meta = parsed.ok ? { structured: structured, provider: router.describeProvider() } : { fallback: parsed.error ?? "parse", raw: rawContent.slice(0, 4_096) };
 

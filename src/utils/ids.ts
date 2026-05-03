@@ -35,3 +35,15 @@ export function createDaemonEventRowId(): string {
 export function createCompanionRowId(prefix: "cmsg" | "csug" | "crm" | "cmem" | "cpend"): string {
   return `${prefix}_${randomUUID()}`;
 }
+
+export function createMemoryItemId(): string {
+  return `mem_${randomUUID()}`;
+}
+
+export function createMemoryProposalId(): string {
+  return `mprop_${randomUUID()}`;
+}
+
+export function createMemoryConflictId(): string {
+  return `mcf_${randomUUID()}`;
+}

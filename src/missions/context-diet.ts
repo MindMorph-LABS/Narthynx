@@ -8,12 +8,13 @@ import { workspaceNoteLooksSensitive } from "../cli/workspace-notes";
 import { loadContextDietConfig, type ContextDietConfig } from "../config/context-diet-config";
 import { loadWorkspacePolicy, type WorkspacePolicy } from "../config/load";
 import { resolveWorkspacePaths } from "../config/workspace";
+import { formatMemoryLineForPack, listMemoryItemsForMissionContext } from "../memory/retrieval";
 import { resolveGuardedWorkspacePath } from "../tools/path-guard";
 import { readMissionContextIndex, sha256Utf8, writeMissionContextIndex, type ContextEntry } from "./context";
 import { appendLedgerEvent, ledgerFilePath } from "./ledger";
 import { createMissionStore, missionDirectory, missionFilePath } from "./store";
 
-export type ModelContextPackEntryKind = "note" | "file" | "workspace_note";
+export type ModelContextPackEntryKind = "note" | "file" | "workspace_note" | "memory";
 
 export interface ModelContextPackEntry {
   kind: ModelContextPackEntryKind;
@@ -23,6 +24,9 @@ export interface ModelContextPackEntry {
   omittedReason?: string;
   stale?: boolean;
   includedOnce?: boolean;
+  /** Present when kind === "memory" — used for citations in ledgers. */
+  memoryItemId?: string;
+  memorySensitivity?: "none" | "low" | "sensitive";
 }
 
 export interface ModelContextPackTotals {
@@ -31,6 +35,7 @@ export interface ModelContextPackTotals {
   noteCount: number;
   fileCount: number;
   workspaceNoteCount: number;
+  memoryItemCount: number;
   includedCount: number;
   omittedCount: number;
   staleOmittedCount: number;
@@ -56,6 +61,8 @@ interface ResolvedItem {
   sortWeight: number;
   /** Hash key for pack-time dedup */
   dedupeKey: string;
+  memoryItemId?: string;
+  memorySensitivity?: "none" | "low" | "sensitive";
 }
 
 const WORKSPACE_NOTES_FILE = "workspace-notes.md";
@@ -121,6 +128,27 @@ export async function buildModelContextPack(
     }
   }
 
+  if (policy.value.memory_storage !== "off") {
+    const memRows = await listMemoryItemsForMissionContext(paths, missionId, policy.value);
+    const cite = policy.value.memory_mission_citations_required;
+    for (const item of memRows) {
+      const truncatedText = truncateFileForPack(item.text, diet);
+      const line = formatMemoryLineForPack({ ...item, text: truncatedText }, cite);
+      const packBytes = Buffer.byteLength(line, "utf8");
+      resolved.push({
+        kind: "memory",
+        label: cite ? `memory@${item.id}` : "memory",
+        fullText: line,
+        packBytes,
+        stale: false,
+        sortWeight: 62,
+        dedupeKey: `mem:${item.id}`,
+        memoryItemId: item.id,
+        memorySensitivity: item.sensitivity
+      });
+    }
+  }
+
   resolved.sort((a, b) => a.sortWeight - b.sortWeight);
 
   const seen = new Set<string>();
@@ -150,7 +178,9 @@ export async function buildModelContextPack(
         text: "",
         estimatedTokens: 0,
         omittedReason: "stale_file_omitted",
-        stale: true
+        stale: true,
+        memoryItemId: item.memoryItemId,
+        memorySensitivity: item.memorySensitivity
       });
       omittedCount += 1;
       staleOmitted += 1;
@@ -168,7 +198,9 @@ export async function buildModelContextPack(
         label: item.label,
         text: "",
         estimatedTokens: 0,
-        omittedReason: overTok ? "pack_max_estimated_tokens" : "pack_max_bytes"
+        omittedReason: overTok ? "pack_max_estimated_tokens" : "pack_max_bytes",
+        memoryItemId: item.memoryItemId,
+        memorySensitivity: item.memorySensitivity
       });
       omittedCount += 1;
       continue;
@@ -182,7 +214,9 @@ export async function buildModelContextPack(
       text: item.fullText,
       estimatedTokens: est,
       stale: item.stale && diet.stale_policy === "warn" ? true : undefined,
-      includedOnce: true
+      includedOnce: true,
+      memoryItemId: item.memoryItemId,
+      memorySensitivity: item.memorySensitivity
     });
   }
 
@@ -191,11 +225,18 @@ export async function buildModelContextPack(
     .map((e) => `### ${e.label} (${e.kind})\n${e.text}`)
     .join("\n\n");
 
+  const memoryPackedIds = included
+    .filter((e) => e.kind === "memory" && e.text.length > 0 && e.memoryItemId)
+    .map((e) => e.memoryItemId!);
+
   const sensitiveContextIncluded = included.some((e) => {
     if (!e.text) {
       return false;
     }
     if (workspaceNoteLooksSensitive(e.text)) {
+      return true;
+    }
+    if (e.kind === "memory" && e.memorySensitivity === "sensitive") {
       return true;
     }
     if ((e.kind === "file" || e.kind === "workspace_note") && isSensitiveContextPath(e.label)) {
@@ -210,6 +251,7 @@ export async function buildModelContextPack(
     noteCount: included.filter((e) => e.kind === "note" && e.text).length,
     fileCount: included.filter((e) => e.kind === "file" && e.text).length,
     workspaceNoteCount: included.filter((e) => e.kind === "workspace_note" && e.text).length,
+    memoryItemCount: included.filter((e) => e.kind === "memory" && e.text).length,
     includedCount: included.filter((e) => e.text.length > 0).length,
     omittedCount,
     staleOmittedCount: staleOmitted
@@ -229,7 +271,8 @@ export async function buildModelContextPack(
         sensitiveContextIncluded,
         pack_max_bytes: maxBytes,
         pack_max_estimated_tokens: maxTok ?? null,
-        stale_policy: diet.stale_policy
+        stale_policy: diet.stale_policy,
+        ...(memoryPackedIds.length > 0 ? { memory_item_ids: memoryPackedIds } : {})
       }
     });
   }

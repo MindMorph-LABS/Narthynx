@@ -56,6 +56,13 @@ export interface WorkspacePaths {
   companionRemindersFile: string;
   companionArtifactsDir: string;
   companionSessionsDir: string;
+  /** `.narthynx/memory` — Frontier F18 Memory OS */
+  memoryDir: string;
+  memoryItemsFile: string;
+  memoryProposalsFile: string;
+  memoryConflictsFile: string;
+  memoryExportDir: string;
+  memoryMigratedFlagFile: string;
 }
 
 export interface WorkspaceInitResult {
@@ -83,6 +90,7 @@ export function resolveWorkspacePaths(cwd = process.cwd()): WorkspacePaths {
 
   const daemonDir = path.join(workspaceDir, "daemon");
   const companionDir = path.join(workspaceDir, "companion");
+  const memoryDir = path.join(workspaceDir, "memory");
 
   return {
     rootDir,
@@ -116,7 +124,13 @@ export function resolveWorkspacePaths(cwd = process.cwd()): WorkspacePaths {
     companionPendingMemoryFile: path.join(companionDir, "memory", "pending.jsonl"),
     companionRemindersFile: path.join(companionDir, "reminders.jsonl"),
     companionArtifactsDir: path.join(companionDir, "artifacts"),
-    companionSessionsDir: path.join(companionDir, "sessions")
+    companionSessionsDir: path.join(companionDir, "sessions"),
+    memoryDir,
+    memoryItemsFile: path.join(memoryDir, "items.jsonl"),
+    memoryProposalsFile: path.join(memoryDir, "proposals.jsonl"),
+    memoryConflictsFile: path.join(memoryDir, "conflicts.jsonl"),
+    memoryExportDir: path.join(memoryDir, "exports"),
+    memoryMigratedFlagFile: path.join(memoryDir, ".migrated_from_companion_f17")
   };
 }
 

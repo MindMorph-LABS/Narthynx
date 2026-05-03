@@ -50,7 +50,13 @@ export const policySchema = z.object({
   /** Reserved for future governed read-only context tools; empty array = none (default). */
   companion_tools: z.array(z.string().min(1)).default([]),
   /** Sensitive cloud context posture for companion model calls (separate from mission planning). */
-  companion_cloud_context: z.enum(["block", "ask", "allow"]).default("block")
+  companion_cloud_context: z.enum(["block", "ask", "allow"]).default("block"),
+  /** Frontier F18 — governs durable memory writes and mission pack inclusion. */
+  memory_storage: z.enum(["off", "minimal", "balanced"]).default("minimal"),
+  /** How to handle memory classified as sensitive (`sensitive` sensitivity). */
+  memory_sensitive_behavior: z.enum(["block", "ask"]).default("block"),
+  /** When true, mission context packs include `memory@id` labels for traceability. */
+  memory_mission_citations_required: z.boolean().default(true)
 });
 
 export type WorkspaceConfig = z.infer<typeof configSchema>;
