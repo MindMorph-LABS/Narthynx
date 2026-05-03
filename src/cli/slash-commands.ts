@@ -1,5 +1,8 @@
 import { readFile } from "node:fs/promises";
 
+import { latestContextPacketLoggedMeta, loadContextPacketFromArtifact } from "../context/inspect";
+import { compileContextPacket } from "../context/kernel";
+import { renderWhy } from "../context/manifest";
 import { loadContextDietConfig } from "../config/context-diet-config";
 import { loadWorkspacePolicy } from "../config/load";
 import { resolveWorkspaceActor } from "../config/identity-config";
@@ -14,7 +17,7 @@ import { createApprovalStore } from "../missions/approvals";
 import { createCheckpointStore } from "../missions/checkpoints";
 import { createReplayService } from "../missions/replay";
 import { createReportService } from "../missions/reports";
-import { createMissionStore } from "../missions/store";
+import { createMissionStore, missionDirectory } from "../missions/store";
 import { createMissionContextService } from "../missions/context";
 import { buildModelContextPack, listStaleContextEntries } from "../missions/context-diet";
 import { createProofCardService } from "../missions/proof-card";
@@ -374,6 +377,51 @@ async function handleContextCommand(
   const parsed = parseContextArgs(args, context.currentMissionId);
   const paths = resolveWorkspacePaths(context.cwd);
 
+  if (parsed.why) {
+    const meta = await latestContextPacketLoggedMeta(context.cwd, parsed.missionId);
+    let block: string;
+    if (meta) {
+      const packet = await loadContextPacketFromArtifact(
+        missionDirectory(paths.missionsDir, parsed.missionId),
+        meta.packetId
+      );
+      block = packet ? renderWhy(packet) : renderWhy((await compileContextPacket({ cwd: context.cwd, missionId: parsed.missionId, trigger: { source: "interactive" }, persist: false })).packet);
+    } else {
+      const { packet } = await compileContextPacket({
+        cwd: context.cwd,
+        missionId: parsed.missionId,
+        trigger: { source: "interactive" },
+        persist: false
+      });
+      block = renderWhy(packet);
+    }
+    context.renderer.rawBlock(block.trimEnd());
+    return stay(parsed.missionId);
+  }
+
+  if (parsed.diet) {
+    const diet = await loadContextDietConfig(paths.contextDietFile);
+    if (!diet.ok) {
+      context.renderer.warn(`context-diet.yaml invalid: ${diet.message}`);
+      context.renderer.rawBlock((await stores.contextService.renderContextSummary(parsed.missionId)).trimEnd());
+      return stay(parsed.missionId);
+    }
+    const { packet } = await compileContextPacket({
+      cwd: context.cwd,
+      missionId: parsed.missionId,
+      trigger: { source: "interactive" },
+      persist: false
+    });
+    const lines = [
+      "context-diet.yaml:",
+      JSON.stringify(diet.value, null, 2),
+      "",
+      renderWhy(packet)
+    ].join("\n");
+    context.renderer.rawBlock(lines.trimEnd());
+    return stay(parsed.missionId);
+  }
+
   if (parsed.note) {
     await stores.contextService.addNote(parsed.missionId, parsed.note);
     context.renderer.info(`Context note added: ${parsed.missionId}`);
@@ -395,7 +443,10 @@ async function handleContextCommand(
     return stay(parsed.missionId);
   }
 
-  const pack = await buildModelContextPack(parsed.missionId, context.cwd, { recordLedger: false });
+  const pack = await buildModelContextPack(parsed.missionId, context.cwd, {
+    trigger: { source: "interactive" },
+    recordLedger: false
+  });
   const stale = await listStaleContextEntries(parsed.missionId, context.cwd);
   const staleLines = stale.filter((s) => s.stale);
 
@@ -566,14 +617,34 @@ function parseMissionArgs(args: string[]): { templateName?: string; goal: string
 function parseContextArgs(
   args: string[],
   currentMissionId: string | undefined
-): { missionId: string; note?: string; file?: string; reason?: string; showPack?: boolean } {
+): {
+  missionId: string;
+  note?: string;
+  file?: string;
+  reason?: string;
+  showPack?: boolean;
+  why: boolean;
+  diet: boolean;
+} {
   let missionId: string | undefined;
   let note: string | undefined;
   let file: string | undefined;
   let reason: string | undefined;
   let showPack = false;
+  let why = false;
+  let diet = false;
 
-  for (let index = 0; index < args.length; index += 1) {
+  let indexStart = 0;
+  const first = args[0];
+  if (first === "why") {
+    why = true;
+    indexStart = 1;
+  } else if (first === "diet") {
+    diet = true;
+    indexStart = 1;
+  }
+
+  for (let index = indexStart; index < args.length; index += 1) {
     const value = args[index];
     if (value === "--note") {
       const collected = collectFlagText(args, index + 1, ["--file", "--reason", "--pack"]);
@@ -607,12 +678,18 @@ function parseContextArgs(
     throw new Error("--reason is required with --file.");
   }
 
+  if ((why || diet) && !missionId && !currentMissionId) {
+    throw new Error(`/context ${why ? "why" : "diet"} requires an active mission or an explicit mission id.`);
+  }
+
   return {
     missionId: missionId ?? requireCurrentMission(currentMissionId),
     note,
     file,
     reason,
-    showPack
+    showPack,
+    why,
+    diet
   };
 }
 

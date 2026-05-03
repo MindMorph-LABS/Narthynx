@@ -135,6 +135,7 @@ type LedgerEventType =
   | "cost.recorded"
   | "user.note"
   | "context.pack_built"
+  | "context.packet_logged"
   | "error";
 ```
 
@@ -163,6 +164,7 @@ Mission state remains local and inspectable:
       artifacts/
         report.md
         outputs/
+        context-packets/   # optional: Frontier F19 persisted `ContextPacket` JSON artifacts (`cpkt_*`)
         diffs/
       checkpoints/
 ```
@@ -176,7 +178,7 @@ Phase 15 adds mission-native helpers without changing the core mission contract:
 - mission templates create ordinary missions with preset titles, goals, success criteria, risk hints, and the standard plan graph
 - context diet commands maintain human-readable `context.md` and structured `context.json` (with optional content hash, file mtime, and deduplication metadata)
 - optional workspace file `.narthynx/context-diet.yaml` caps and shapes the **model context pack** (truncation, staleness policy, optional inclusion of workspace notes) without rewriting stored `context.md`
-- the **model context pack** is a derived view: mission notes and allowed files (plus optional `workspace-notes.md`) merged under byte/token budgets; ledger event `context.pack_built` records sizes, omissions, and whether the pack was classified as sensitive
+- the **model context pack** is a derived view: mission notes and allowed files (plus optional `workspace-notes.md`) merged under byte/token budgets; ledger event **`context.packet_logged`** (Frontier F19) writes a summarized manifest + **`context.pack_built`** remains a compatibility rollup with overlapping size fields / `memory_item_ids`
 - proof cards create compact Markdown artifacts at `artifacts/proof-card.md`
 - optional **`.narthynx/model-routing.yaml`** defines per-task OpenAI-compatible or stub **endpoints**, a single **fallback** per provider chain, and optional mission **budgets** (`fail_closed` vs `downgrade_stub`); when absent, model selection follows environment defaults (stub-first)
 - optional **encrypted mission vault** per mission under `.narthynx/missions/<id>/vault/` with workspace **`.narthynx/vault-kdf.salt`**; CLI `narthynx vault`; runtime **`vault.read`** behind `vault` policy; ledger **`vault.secret_read`** is redacted (see **`docs/vault.md`**)

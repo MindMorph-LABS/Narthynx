@@ -30,12 +30,14 @@ export function createModelPlanner(cwd = process.cwd(), routerOptions: Omit<Mode
             text: string;
             totals: { bytes: number; estimatedTokens: number; includedCount: number };
             sensitiveContextIncluded: boolean;
+            contextPacketId?: string;
+            exclusionCounts?: Record<string, number>;
           }
         | undefined;
       let sensitiveContextIncluded = false;
 
       if (policy.ok && (policy.value.cloud_model_sensitive_context === "allow" || policy.value.cloud_model_sensitive_context === "ask")) {
-        const pack = await buildModelContextPack(missionId, cwd);
+        const pack = await buildModelContextPack(missionId, cwd, { trigger: { source: "planning" } });
         packBlock = {
           text: pack.packText,
           totals: {
@@ -43,7 +45,9 @@ export function createModelPlanner(cwd = process.cwd(), routerOptions: Omit<Mode
             estimatedTokens: pack.totals.estimatedTokens,
             includedCount: pack.totals.includedCount
           },
-          sensitiveContextIncluded: pack.sensitiveContextIncluded
+          sensitiveContextIncluded: pack.sensitiveContextIncluded,
+          contextPacketId: pack.contextPacketId,
+          exclusionCounts: pack.exclusionCounts
         };
         sensitiveContextIncluded = pack.sensitiveContextIncluded;
       }

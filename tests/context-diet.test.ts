@@ -84,6 +84,7 @@ describe("context diet engine", () => {
     const paths = resolveWorkspacePaths(cwd);
     const ledgerPath = path.join(missionDirectory(paths.missionsDir, mission.id), "ledger.jsonl");
     const events = await readLedgerEvents(ledgerPath, { allowMissing: false });
+    expect(events.some((e) => e.type === "context.packet_logged")).toBe(true);
     expect(events.some((e) => e.type === "context.pack_built")).toBe(true);
   });
 
