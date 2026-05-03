@@ -40,6 +40,10 @@ Shell actions are not treated as reversible. Narthynx records what happened but 
 
 Phase 11 does not add mutating Git commands, raw shell strings, network connectors, external communication, browser automation, or hosted execution.
 
+## Event-to-mission triggers (ingress)
+
+**Triggers** normalize external events and may **`createMission`** from `.narthynx/triggers.yaml` rules; they are **not** Phase 11 typed tools. See [`triggers.md`](triggers.md) for the threat model, CLI (`narthynx triggers`), and the Cockpit GitHub webhook path. Connectors remain the mechanism for **in-mission** tool execution with policy and approvals.
+
 ## Phase 12 Model Providers
 
 Model providers are not typed tools; they are routed through `src/agent/model-router.ts` and recorded in each mission ledger.

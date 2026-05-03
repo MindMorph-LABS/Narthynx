@@ -19,3 +19,7 @@ export function createCheckpointId(): string {
 export function createArtifactId(): string {
   return `art_${randomUUID()}`;
 }
+
+export function createTriggerEventId(): string {
+  return `e_trig_${randomUUID()}`;
+}

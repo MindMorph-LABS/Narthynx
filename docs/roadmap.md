@@ -64,7 +64,6 @@ Do not start these before the MVP is complete and stable:
 
 - local web cockpit
 - visual mission graph
-- event-to-mission triggers
 - browser connector
 - MCP connector
 - GitHub connector
@@ -72,5 +71,7 @@ Do not start these before the MVP is complete and stable:
 - cloud/local hybrid execution
 - safe team collaboration
 - encrypted mission vault
+
+**Event-to-mission triggers** (declarative rules, Event Memory, GitHub webhook on the Cockpit) are documented in [`docs/triggers.md`](triggers.md). They create missions only; they do not replace typed connectors or auto-execute the executor.
 
 Post-MVP work must preserve the same invariants: local-first operation, durable state, typed tools, approval-gated risk, transparent ledgers, reports, and replay.
