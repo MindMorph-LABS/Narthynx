@@ -1,79 +1,120 @@
-import type { ModelCallRequest, ModelCallResponse, ModelProvider } from "../model-provider";
+import type { ModelCallRequest, ModelCallResponse, ModelProvider, ModelTask } from "../model-provider";
 import { ModelProviderError } from "../model-provider";
 
 export interface OpenAICompatibleProviderOptions {
   baseUrl: string;
   apiKey: string;
   model: string;
+  /** When omitted, derived from baseUrl (loopback = local). */
+  isNetworked?: boolean;
   fetchImpl?: typeof fetch;
+  timeoutMs?: number;
+  maxTokens?: number;
+  temperature?: number;
 }
+
+const TASK_SYSTEM_PROMPTS: Record<ModelTask, string> = {
+  intent_classification:
+    "You are Narthynx's intent classifier. Return only valid JSON. Do not include markdown fences.",
+  planning:
+    "You are Narthynx's model planning provider. Return only valid JSON. Do not include markdown fences.",
+  file_summarization:
+    "You are Narthynx's summarization helper. Return only valid JSON or plain summary text as requested. Do not include markdown fences unless the user input asks for it.",
+  tool_argument_drafting:
+    "You are Narthynx's tool-argument assistant. Return only valid JSON for tool arguments. Do not include markdown fences.",
+  risk_classification:
+    "You are Narthynx's risk classifier. Return only valid JSON. Do not include markdown fences.",
+  final_report:
+    "You are Narthynx's report drafting assistant. Return only valid JSON or Markdown as specified in the user message. Do not wrap in markdown fences unless asked."
+};
 
 export function createOpenAICompatibleProvider(options: OpenAICompatibleProviderOptions): ModelProvider {
   const baseUrl = options.baseUrl.replace(/\/+$/, "");
   const fetchImpl = options.fetchImpl ?? fetch;
+  const isNetworked = options.isNetworked ?? true;
+  const timeoutMs = options.timeoutMs ?? 120_000;
+  const temperature = options.temperature ?? 0;
+  const max_tokens = options.maxTokens ?? 4096;
 
   return {
     name: "openai-compatible",
     model: options.model,
-    isNetworked: true,
+    isNetworked,
     async call(request: ModelCallRequest): Promise<ModelCallResponse> {
       const started = Date.now();
-      const response = await fetchImpl(`${baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${options.apiKey}`
-        },
-        body: JSON.stringify({
-          model: options.model,
-          temperature: 0,
-          messages: [
-            {
-              role: "system",
-              content:
-                "You are Narthynx's model planning provider. Return only valid JSON. Do not include markdown fences."
-            },
-            {
-              role: "user",
-              content: JSON.stringify({
-                task: request.task,
-                purpose: request.purpose,
-                input: request.input
-              })
-            }
-          ]
-        })
-      }).catch((error: unknown) => {
-        const message = error instanceof Error ? error.message : "Unknown network failure";
-        throw new ModelProviderError(`OpenAI-compatible provider request failed: ${redactSecrets(message)}`, "request_failed");
-      });
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-      const text = await response.text();
-      let body: unknown;
+      const systemContent = TASK_SYSTEM_PROMPTS[request.task] ?? TASK_SYSTEM_PROMPTS.planning;
+
       try {
-        body = text.length > 0 ? JSON.parse(text) : {};
-      } catch {
-        throw new ModelProviderError("OpenAI-compatible provider returned non-JSON response.", "invalid_response");
+        const response = await fetchImpl(`${baseUrl}/chat/completions`, {
+          method: "POST",
+          signal: controller.signal,
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${options.apiKey}`
+          },
+          body: JSON.stringify({
+            model: options.model,
+            temperature,
+            max_tokens: max_tokens,
+            messages: [
+              {
+                role: "system",
+                content: systemContent
+              },
+              {
+                role: "user",
+                content: JSON.stringify({
+                  task: request.task,
+                  purpose: request.purpose,
+                  input: request.input
+                })
+              }
+            ]
+          })
+        }).catch((error: unknown) => {
+          if (error instanceof DOMException && error.name === "AbortError") {
+            throw new ModelProviderError(`OpenAI-compatible provider timed out after ${timeoutMs}ms.`, "timeout");
+          }
+          if (error instanceof Error && error.name === "AbortError") {
+            throw new ModelProviderError(`OpenAI-compatible provider timed out after ${timeoutMs}ms.`, "timeout");
+          }
+          const message = error instanceof Error ? error.message : "Unknown network failure";
+          throw new ModelProviderError(`OpenAI-compatible provider request failed: ${redactSecrets(message)}`, "request_failed");
+        });
+
+        const text = await response.text();
+        let body: unknown;
+        try {
+          body = text.length > 0 ? JSON.parse(text) : {};
+        } catch {
+          throw new ModelProviderError("OpenAI-compatible provider returned non-JSON response.", "invalid_response");
+        }
+
+        if (!response.ok) {
+          throw new ModelProviderError(
+            `OpenAI-compatible provider returned HTTP ${response.status}: ${redactSecrets(extractErrorMessage(body))}`,
+            "http_error",
+            { httpStatus: response.status }
+          );
+        }
+
+        const content = extractContent(body);
+        const usage = extractUsage(body);
+
+        return {
+          provider: "openai-compatible",
+          model: options.model,
+          content,
+          usage,
+          cost: estimateOpenAICost(usage),
+          latencyMs: Date.now() - started
+        };
+      } finally {
+        clearTimeout(timer);
       }
-
-      if (!response.ok) {
-        throw new ModelProviderError(
-          `OpenAI-compatible provider returned HTTP ${response.status}: ${redactSecrets(extractErrorMessage(body))}`,
-          "http_error"
-        );
-      }
-
-      const content = extractContent(body);
-      const usage = extractUsage(body);
-
-      return {
-        provider: "openai-compatible",
-        model: options.model,
-        content,
-        usage,
-        cost: estimateOpenAICost(usage),
-        latencyMs: Date.now() - started
-      };
     }
   };
 }

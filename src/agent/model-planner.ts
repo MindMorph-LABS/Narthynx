@@ -34,7 +34,7 @@ export function createModelPlanner(cwd = process.cwd(), routerOptions: Omit<Mode
         | undefined;
       let sensitiveContextIncluded = false;
 
-      if (policy.ok && policy.value.cloud_model_sensitive_context === "allow") {
+      if (policy.ok && (policy.value.cloud_model_sensitive_context === "allow" || policy.value.cloud_model_sensitive_context === "ask")) {
         const pack = await buildModelContextPack(missionId, cwd);
         packBlock = {
           text: pack.packText,

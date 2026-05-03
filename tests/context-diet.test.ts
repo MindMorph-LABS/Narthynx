@@ -107,9 +107,15 @@ describe("context diet engine", () => {
 });
 
 describe("model planner and context pack policy", () => {
-  it("does not attach pack when cloud_model_sensitive_context is not allow", async () => {
+  it("does not attach pack when cloud_model_sensitive_context is block", async () => {
     const cwd = await tempWorkspaceRoot();
     await initWorkspace(cwd);
+    const policyPath = path.join(cwd, WORKSPACE_DIR_NAME, "policy.yaml");
+    const raw = await readFile(policyPath, "utf8");
+    const policy = YAML.parse(raw) as Record<string, unknown>;
+    policy.cloud_model_sensitive_context = "block";
+    await writeFile(policyPath, YAML.stringify(policy), "utf8");
+
     const store = createMissionStore(cwd);
     const mission = await store.createMission({ goal: "Goal" });
     await createMissionContextService(cwd).addNote(mission.id, "secret context note");

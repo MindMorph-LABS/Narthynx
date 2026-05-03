@@ -16,6 +16,7 @@ import { loadContextDietConfig } from "./context-diet-config";
 import { loadGithubConfig, normalizeRepoAllowEntry } from "./github-config";
 import { getGithubAuthToken } from "./github-env";
 import { findMcpServer, loadMcpConfig } from "./mcp-config";
+import { loadModelRoutingConfig, MODEL_ROUTING_FILE_NAME } from "./model-routing-config";
 import { loadWorkspaceConfig, loadWorkspacePolicy } from "./load";
 
 export interface WorkspacePaths {
@@ -24,6 +25,7 @@ export interface WorkspacePaths {
   configFile: string;
   policyFile: string;
   contextDietFile: string;
+  modelRoutingFile: string;
   mcpFile: string;
   githubFile: string;
   mcpCacheDir: string;
@@ -59,6 +61,7 @@ export function resolveWorkspacePaths(cwd = process.cwd()): WorkspacePaths {
     configFile: path.join(workspaceDir, CONFIG_FILE_NAME),
     policyFile: path.join(workspaceDir, POLICY_FILE_NAME),
     contextDietFile: path.join(workspaceDir, CONTEXT_DIET_FILE_NAME),
+    modelRoutingFile: path.join(workspaceDir, MODEL_ROUTING_FILE_NAME),
     mcpFile: path.join(workspaceDir, MCP_FILE_NAME),
     githubFile: path.join(workspaceDir, GITHUB_FILE_NAME),
     mcpCacheDir: path.join(workspaceDir, ".cache", "mcp-tools"),
@@ -169,6 +172,20 @@ export async function doctorWorkspace(cwd = process.cwd()): Promise<DoctorResult
       : dietFileStat?.isFile()
         ? `context-diet.yaml OK (pack_max_bytes=${dietConfig.value.pack_max_bytes})`
         : `no context-diet.yaml (defaults: pack_max_bytes=${dietConfig.value.pack_max_bytes})`
+  });
+
+  const routingConfig = await loadModelRoutingConfig(paths.modelRoutingFile);
+  const routingStat = await stat(paths.modelRoutingFile).catch(() => undefined);
+  checks.push({
+    name: "model routing yaml",
+    ok: routingConfig.ok,
+    message: !routingConfig.ok
+      ? `model-routing.yaml invalid: ${routingConfig.message}`
+      : routingStat?.isFile()
+        ? routingConfig.value.tasks && Object.keys(routingConfig.value.tasks).length > 0
+          ? `model-routing.yaml OK (${Object.keys(routingConfig.value.tasks).length} task route(s))`
+          : "model-routing.yaml OK (no per-task routes; using env/default stub)"
+        : "no model-routing.yaml (env-based model provider selection)"
   });
 
   if (policy.ok && mcpConfig.ok && policy.value.mcp !== "block" && policy.value.mcp_servers_allow !== undefined) {

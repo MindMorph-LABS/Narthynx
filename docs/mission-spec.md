@@ -140,6 +140,8 @@ type LedgerEventType =
 
 The ledger must make `narthynx replay <mission-id>` possible. No hidden action should be missing from replay.
 
+`model.called` events SHOULD include a `routing` object (primary vs used endpoint, fallback usage, sensitive-context consent approval id when applicable) for hybrid local/cloud inference audits.
+
 ## Durable Workspace Shape
 
 Mission state remains local and inspectable:
@@ -149,6 +151,7 @@ Mission state remains local and inspectable:
   config.yaml
   policy.yaml
   context-diet.yaml   # optional: model context pack caps and staleness
+  model-routing.yaml  # optional: per-task model endpoints, fallbacks, budgets
   missions/
     <mission-id>/
       mission.yaml
@@ -174,5 +177,6 @@ Phase 15 adds mission-native helpers without changing the core mission contract:
 - optional workspace file `.narthynx/context-diet.yaml` caps and shapes the **model context pack** (truncation, staleness policy, optional inclusion of workspace notes) without rewriting stored `context.md`
 - the **model context pack** is a derived view: mission notes and allowed files (plus optional `workspace-notes.md`) merged under byte/token budgets; ledger event `context.pack_built` records sizes, omissions, and whether the pack was classified as sensitive
 - proof cards create compact Markdown artifacts at `artifacts/proof-card.md`
+- optional **`.narthynx/model-routing.yaml`** defines per-task OpenAI-compatible or stub **endpoints**, a single **fallback** per provider chain, and optional mission **budgets** (`fail_closed` vs `downgrade_stub`); when absent, model selection follows environment defaults (stub-first)
 
 These features must use existing mission stores, ledger events, artifacts, reports, and replay surfaces rather than bypassing persisted state.

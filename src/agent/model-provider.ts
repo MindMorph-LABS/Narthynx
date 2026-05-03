@@ -53,7 +53,8 @@ export interface ModelProvider {
 export class ModelProviderError extends Error {
   constructor(
     message: string,
-    readonly code: string
+    readonly code: string,
+    readonly meta?: Record<string, unknown>
   ) {
     super(message);
     this.name = "ModelProviderError";

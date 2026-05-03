@@ -153,16 +153,17 @@ export async function dispatchSlashCommand(
 
 function createInteractiveStores(cwd: string) {
   const toolRegistry = createToolRegistry();
+  const approvalStore = createApprovalStore(cwd);
   return {
     missionStore: createMissionStore(cwd),
-    approvalStore: createApprovalStore(cwd),
+    approvalStore,
     checkpointStore: createCheckpointStore(cwd),
     reportService: createReportService(cwd),
     replayService: createReplayService(cwd),
     contextService: createMissionContextService(cwd),
     proofCardService: createProofCardService(cwd),
     costService: createCostService(cwd),
-    modelPlanner: createModelPlanner(cwd),
+    modelPlanner: createModelPlanner(cwd, { approvalStore }),
     executor: createMissionExecutor(cwd),
     toolRegistry,
     toolRunner: createToolRunner({ cwd, registry: toolRegistry })

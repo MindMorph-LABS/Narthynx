@@ -129,7 +129,9 @@ The **model context pack** is built from mission `context.json` / files under po
 
 Packs are classified for sensitivity using the same path heuristics as `@` attach and text heuristics used for workspace notes (API keys, private key blocks, common token patterns). The ledger records `context.pack_built` with sizes and `sensitiveContextIncluded`.
 
-When `cloud_model_sensitive_context` is **`allow`**, model planning may attach the pack to the router input and sets `sensitiveContextIncluded` to match that classification. Values **`block`** and **`ask`** do not attach the pack to cloud routes (unchanged Phase 12 behavior for networked providers and approvals).
+When `cloud_model_sensitive_context` is **`allow`**, model planning may attach the pack to the router input and sets `sensitiveContextIncluded` to match that classification.
+
+When it is **`ask`**, the planner still builds the pack (same as allow) so an approval can cover sending it to a networked provider. The router creates a pending approval (**tool** `narthynx.model.sensitive_context`) before the first networked call with sensitive context; after `narthynx approve <id>`, the next model call for the same task reuses that consent once and marks it executed. If **`cloud_model_sensitive_context` is `block`**, the pack is not attached to planning input.
 
 Future features may add more typed workflows for some of the actions in this document, but only with explicit policy, approval, ledger, and honest rollback/checkpoint behavior.
 
@@ -141,16 +143,18 @@ Phase 11 shell and Git connectors preserve the same safety contract:
 - `git.diff` and `git.log` are read-only. They should report repository failures honestly instead of fabricating clean output.
 - Shell output is captured as mission artifacts and ledger events. Shell actions are not treated as reversible.
 
-## Model Providers
+## Model providers and hybrid routing
 
 Phase 12 adds model routing without weakening local-first defaults:
 
 - `stub` is the default provider and never uses network or API keys.
-- OpenAI-compatible providers are opt-in through environment variables only.
-- Networked model calls require `allow_network: true`.
-- Sensitive context is blocked or refused unless `cloud_model_sensitive_context: allow` is set.
-- API keys are read from environment variables and must not be written to ledgers, reports, replay output, or mission files.
-- Every successful model call records `model.called` and `cost.recorded` events so `/cost`, reports, and replay remain transparent.
+- OpenAI-compatible endpoints are opt-in via environment variables (`NARTHYNX_MODEL_PROVIDER=openai-compatible`, base URL, key, model) **or** per-task entries in optional `.narthynx/model-routing.yaml`.
+- **Loopback** OpenAI-compatible base URLs (for example `http://127.0.0.1:11434/v1`) are treated as **local inference**: they do not require `allow_network: true` and do not trigger sensitive-context cloud approval by themselves.
+- **Non-loopback** URLs are **networked**: they require `allow_network: true`, honor `cloud_model_sensitive_context`, and appear in policy enforcement like any cloud route.
+- Optional **YAML routing** maps each model task (`planning`, `final_report`, etc.) to a `primary` endpoint and optional **single** `fallback` (used only for timeout / transport / HTTP error class failures — not for invalid JSON from the model).
+- Optional **budgets** in `model-routing.yaml` cap estimated mission token totals and recorded cost: `on_exceed: fail_closed` rejects further calls; `on_exceed: downgrade_stub` forces the stub provider when a cap is reached.
+- API keys are read from environment variables (per-endpoint `api_key_env` or `NARTHYNX_OPENAI_API_KEY`) and must not be written to ledgers, reports, replay output, or mission files.
+- Every successful model call records `model.called` and `cost.recorded` events. `model.called.details.routing` records endpoint ids, whether a fallback was used, consent approval linkage, and budget downgrade when applicable.
 
 ## Executor Boundary
 

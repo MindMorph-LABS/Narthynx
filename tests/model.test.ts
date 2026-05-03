@@ -6,12 +6,13 @@ import { describe, expect, it, vi } from "vitest";
 import { buildMissionCostSummary, createCostService } from "../src/agent/cost";
 import { createModelPlanner } from "../src/agent/model-planner";
 import { createModelRouter } from "../src/agent/model-router";
-import type { ModelCallRequest, ModelProvider } from "../src/agent/model-provider";
+import { ModelProviderError } from "../src/agent/model-provider";
 import { createOpenAICompatibleProvider } from "../src/agent/providers/openai-compatible";
 import { createStubModelProvider } from "../src/agent/providers/stub";
 import { defaultPolicyYaml } from "../src/config/defaults";
 import { initWorkspace } from "../src/config/workspace";
 import { createDeterministicPlanGraph } from "../src/missions/graph";
+import { createApprovalStore } from "../src/missions/approvals";
 import { createMissionStore } from "../src/missions/store";
 
 async function tempWorkspaceRoot(): Promise<string> {
@@ -150,21 +151,32 @@ describe("model router and planner", () => {
     ).rejects.toThrow("allow_network is false");
   });
 
-  it("blocks sensitive cloud model requests when policy is ask", async () => {
+  it("creates an approval for sensitive cloud model requests when policy is ask", async () => {
     const { cwd, mission } = await initializedMission();
     await writeFile(path.join(cwd, ".narthynx", "policy.yaml"), defaultPolicyYaml().replace("allow_network: false", "allow_network: true"), "utf8");
+    const approvalStore = createApprovalStore(cwd);
     const provider = fakeProvider({ isNetworked: true });
-    const router = createModelRouter({ cwd, provider });
+    const router = createModelRouter({ cwd, provider, approvalStore });
 
-    await expect(
-      router.call({
+    try {
+      await router.call({
         missionId: mission.id,
         task: "planning",
         purpose: "mission planning",
         sensitiveContextIncluded: true,
         input: {}
-      })
-    ).rejects.toThrow("typed model-context approval flow");
+      });
+      expect.fail("expected sensitive_requires_approval");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ModelProviderError);
+      const err = error as ModelProviderError;
+      expect(err.code).toBe("sensitive_requires_approval");
+      expect(err.meta?.approvalId).toMatch(/^a_/);
+    }
+
+    const pending = await approvalStore.listPendingApprovals();
+    expect(pending.length).toBe(1);
+    expect(pending[0]?.toolName).toBe("narthynx.model.sensitive_context");
   });
 
   it("writes a validated model plan and leaves the graph unchanged on invalid model output", async () => {
