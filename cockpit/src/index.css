@@ -8,6 +8,8 @@
   line-height: 1.5;
   color: #0f172a;
   background: #f8fafc;
+  --graph-edge-active: #0369a1;
+  --graph-edge-muted: #94a3b8;
 }
 
 * {
@@ -150,4 +152,123 @@ a {
 
 .error {
   color: #b91c1c;
+}
+
+.muted {
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.graph-page {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.flow-wrap--main {
+  flex: 1 1 520px;
+  min-width: 280px;
+}
+
+.graph-inspector {
+  flex: 0 1 300px;
+  max-width: 100%;
+  margin-bottom: 0;
+}
+
+.graph-inspector h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.graph-inspector h3 {
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+}
+
+.graph-inspector-hint {
+  font-size: 0.8rem;
+  margin: 0 0 0.5rem;
+  color: #475569;
+}
+
+.graph-inspector-body {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.graph-inspector-desc {
+  font-size: 0.85rem;
+  margin: 0.35rem 0;
+}
+
+.mission-node-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+  align-items: center;
+}
+
+.status-badge {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding: 0.15rem 0.35rem;
+  border-radius: 4px;
+  background: #e2e8f0;
+  color: #334155;
+  font-weight: 600;
+}
+
+.status-pending {
+  background: #e2e8f0;
+}
+.status-ready {
+  background: #bae6fd;
+  color: #0c4a6e;
+}
+.status-blocked {
+  background: #fde68a;
+  color: #78350f;
+}
+.status-completed {
+  background: #bbf7d0;
+  color: #14532d;
+}
+.status-failed {
+  background: #fecaca;
+  color: #7f1d1d;
+}
+
+.mission-node--emphasis {
+  box-shadow: 0 0 0 2px var(--graph-edge-active);
+}
+
+.mission-node--failed {
+  border-color: #b91c1c;
+}
+
+.mission-node--research {
+  border-left: 4px solid #6366f1;
+}
+.mission-node--action {
+  border-left: 4px solid #0ea5e9;
+}
+.mission-node--approval {
+  border-left: 4px solid #f59e0b;
+}
+.mission-node--verification {
+  border-left: 4px solid #8b5cf6;
+}
+.mission-node--recovery {
+  border-left: 4px solid #f43f5e;
+}
+.mission-node--handoff {
+  border-left: 4px solid #64748b;
+}
+.mission-node--artifact {
+  border-left: 4px solid #10b981;
 }

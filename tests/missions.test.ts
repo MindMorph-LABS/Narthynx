@@ -221,4 +221,21 @@ describe("mission store", () => {
     await expect(store.readMission("m_bad")).rejects.toThrow("Failed to read mission at");
     await expect(store.readMission("m_bad")).rejects.toThrow("state");
   });
+
+  it("persists graph-view positions and merges patches with last-write-wins per node", async () => {
+    const cwd = await tempWorkspaceRoot();
+    await initWorkspace(cwd);
+    const store = createMissionStore(cwd);
+    const mission = await store.createMission({ goal: "Layout persistence" });
+    const graph = await store.readMissionPlanGraph(mission.id);
+    const firstNodeId = graph.nodes[0].id;
+
+    await store.mergeGraphViewPositions(mission.id, { [firstNodeId]: { x: 10, y: 20 } });
+    const v1 = await store.readGraphView(mission.id);
+    expect(v1?.positions[firstNodeId]).toEqual({ x: 10, y: 20 });
+
+    await store.mergeGraphViewPositions(mission.id, { [firstNodeId]: { x: 99, y: 101 } });
+    const v2 = await store.readGraphView(mission.id);
+    expect(v2?.positions[firstNodeId]).toEqual({ x: 99, y: 101 });
+  });
 });
