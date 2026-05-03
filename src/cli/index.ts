@@ -7,6 +7,7 @@ import { createCostService } from "../agent/cost";
 import { createMissionExecutor } from "../agent/executor";
 import { createModelPlanner } from "../agent/model-planner";
 import { doctorWorkspace, initWorkspace, resolveWorkspacePaths } from "../config/workspace";
+import { runCockpitServer, resolveCockpitPort } from "../cockpit/serve";
 import { runInteractiveSession } from "./interactive";
 import { createApprovalStore } from "../missions/approvals";
 import { createCheckpointStore } from "../missions/checkpoints";
@@ -38,6 +39,7 @@ export const CLI_COMMANDS = [
   "report",
   "proof",
   "cost",
+  "cockpit",
   "pause",
   "resume",
   "replay",
@@ -63,6 +65,7 @@ export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
     | "report"
     | "proof"
     | "cost"
+    | "cockpit"
     | "pause"
     | "resume"
     | "replay"
@@ -84,6 +87,7 @@ export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
     name !== "report" &&
     name !== "proof" &&
     name !== "cost" &&
+    name !== "cockpit" &&
     name !== "pause" &&
     name !== "resume" &&
     name !== "replay" &&
@@ -586,6 +590,51 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
     .action(async (missionId: string) => {
       try {
         io.writeOut(await costService.renderMissionCost(missionId));
+      } catch (error) {
+        writeCliError(io, error);
+      }
+    });
+
+  program
+    .command("cockpit")
+    .description("Start the local web Mission Cockpit (dashboard, graph, ledger, replay, approvals).")
+    .option("-p, --port <port>", "HTTP port")
+    .option("--host <address>", "Bind address (default 127.0.0.1)", "127.0.0.1")
+    .option("--danger-listen-on-lan", "Bind 0.0.0.0 — exposes the cockpit to your LAN", false)
+    .action(async (commandOptions: { port?: string; host: string; dangerListenOnLan: boolean }) => {
+      try {
+        let host = commandOptions.host.trim() || "127.0.0.1";
+        const portParsed =
+          commandOptions.port !== undefined && commandOptions.port.length > 0
+            ? Number(commandOptions.port)
+            : resolveCockpitPort();
+        if (!Number.isInteger(portParsed) || portParsed < 1 || portParsed > 65535) {
+          throw new Error("Invalid --port (use 1-65535).");
+        }
+
+        if (commandOptions.dangerListenOnLan) {
+          host = "0.0.0.0";
+          io.writeErr(
+            "\nWARNING: Cockpit is listening on all interfaces (0.0.0.0). Anyone on your LAN may reach this server.\nSet a strong NARTHYNX_COCKPIT_TOKEN or keep default loopback binding.\n\n"
+          );
+        }
+
+        await runCockpitServer({
+          cwd,
+          port: portParsed,
+          host,
+          dangerListenOnLan: commandOptions.dangerListenOnLan,
+          importMetaUrl: import.meta.url,
+          onListening: ({ url, token, wroteTokenFile }) => {
+            io.writeOut("Narthynx Mission Cockpit\n");
+            io.writeOut(`${url}\n\n`);
+            io.writeOut(`Bearer token (paste in cockpit login):\n${token}\n`);
+            if (wroteTokenFile) {
+              io.writeOut("\nToken saved under .narthynx/cockpit/token (override with NARTHYNX_COCKPIT_TOKEN).\n");
+            }
+            io.writeOut("\nCtrl+C to stop.\n");
+          }
+        });
       } catch (error) {
         writeCliError(io, error);
       }

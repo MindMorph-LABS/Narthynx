@@ -98,6 +98,8 @@ pnpm narthynx init
 pnpm narthynx doctor
 ```
 
+Optional: open the **local web Mission Cockpit** (dashboard, graph, ledger, replay, approvals) on `http://127.0.0.1:17890` after the workspace is healthy. Run `pnpm narthynx cockpit` and sign in with the printed Bearer token. See [`docs/cockpit.md`](docs/cockpit.md) for security and LAN binding notes.
+
 Show the full CLI surface:
 
 ```bash
