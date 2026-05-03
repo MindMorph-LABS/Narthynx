@@ -136,6 +136,11 @@ type LedgerEventType =
   | "user.note"
   | "context.pack_built"
   | "context.packet_logged"
+  | "subagent.session_started"
+  | "subagent.turn"
+  | "subagent.completed"
+  | "subagent.failed"
+  | "subagent.tool_blocked"
   | "error";
 ```
 
@@ -153,6 +158,7 @@ Mission state remains local and inspectable:
   policy.yaml
   context-diet.yaml   # optional: model context pack caps and staleness
   model-routing.yaml  # optional: per-task model endpoints, fallbacks, budgets
+  subagents.yaml      # optional: bounded subagent profiles (Frontier F20)
   identity.yaml       # optional: ledger actor id for collaboration audit
   missions/
     <mission-id>/

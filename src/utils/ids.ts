@@ -52,3 +52,7 @@ export function createMemoryConflictId(): string {
 export function createContextPacketId(): string {
   return `cpkt_${randomUUID()}`;
 }
+
+export function createSubagentSessionId(): string {
+  return `sag_${randomUUID()}`;
+}

@@ -34,8 +34,13 @@ export const ledgerEventTypeSchema = z.enum([
   "context.pack_built",
   "vault.secret_read",
   "daemon.recovery",
-  "error",
-  "context.packet_logged"
+  "context.packet_logged",
+  "subagent.session_started",
+  "subagent.turn",
+  "subagent.completed",
+  "subagent.failed",
+  "subagent.tool_blocked",
+  "error"
 ]);
 
 export const ledgerEventSchema = z.object({
