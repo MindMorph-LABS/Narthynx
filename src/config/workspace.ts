@@ -3,12 +3,14 @@ import path from "node:path";
 
 import {
   CONFIG_FILE_NAME,
+  MCP_FILE_NAME,
   MISSIONS_DIR_NAME,
   POLICY_FILE_NAME,
   WORKSPACE_DIR_NAME,
   defaultConfigYaml,
   defaultPolicyYaml
 } from "./defaults";
+import { findMcpServer, loadMcpConfig } from "./mcp-config";
 import { loadWorkspaceConfig, loadWorkspacePolicy } from "./load";
 
 export interface WorkspacePaths {
@@ -16,6 +18,8 @@ export interface WorkspacePaths {
   workspaceDir: string;
   configFile: string;
   policyFile: string;
+  mcpFile: string;
+  mcpCacheDir: string;
   missionsDir: string;
 }
 
@@ -47,6 +51,8 @@ export function resolveWorkspacePaths(cwd = process.cwd()): WorkspacePaths {
     workspaceDir,
     configFile: path.join(workspaceDir, CONFIG_FILE_NAME),
     policyFile: path.join(workspaceDir, POLICY_FILE_NAME),
+    mcpFile: path.join(workspaceDir, MCP_FILE_NAME),
+    mcpCacheDir: path.join(workspaceDir, ".cache", "mcp-tools"),
     missionsDir: path.join(workspaceDir, MISSIONS_DIR_NAME)
   };
 }
@@ -90,6 +96,34 @@ export async function doctorWorkspace(cwd = process.cwd()): Promise<DoctorResult
     ok: policy.ok,
     message: policy.ok ? "policy.yaml parsed and passed validation" : `policy.yaml invalid: ${policy.message}`
   });
+
+  const mcpConfig = await loadMcpConfig(paths.mcpFile);
+  checks.push({
+    name: "mcp yaml",
+    ok: mcpConfig.ok,
+    message: mcpConfig.ok
+      ? mcpConfig.value.servers.length > 0
+        ? `mcp.yaml OK (${mcpConfig.value.servers.length} server(s))`
+        : "mcp.yaml absent or empty (no MCP servers configured)"
+      : `mcp.yaml invalid: ${mcpConfig.message}`
+  });
+
+  if (policy.ok && mcpConfig.ok && policy.value.mcp !== "block" && policy.value.mcp_servers_allow !== undefined) {
+    const allowed = new Set(policy.value.mcp_servers_allow);
+    const unknown = policy.value.mcp_servers_allow.filter((id) => !findMcpServer(mcpConfig.value, id));
+    const blockedServers = mcpConfig.value.servers.filter((s) => !allowed.has(s.id));
+    const coherenceOk = unknown.length === 0 && blockedServers.length === 0;
+    checks.push({
+      name: "mcp policy coherence",
+      ok: coherenceOk,
+      message:
+        unknown.length > 0
+          ? `mcp_servers_allow references unknown server id(s): ${unknown.join(", ")}`
+          : blockedServers.length > 0
+            ? `policy allows only [${[...allowed].join(", ")}]; configured but not allowed: ${blockedServers.map((s) => s.id).join(", ")}`
+            : "MCP allowlist matches configured servers"
+    });
+  }
 
   return {
     ok: checks.every((check) => check.ok),

@@ -64,6 +64,8 @@ browser: block
 browser_hosts_allow: []
 browser_max_navigation_ms: 30000
 browser_max_steps_per_session: 50
+mcp: block
+mcp_max_concurrent_sessions: 1
 ```
 
 ## Browser tools and policy
@@ -75,6 +77,12 @@ Browser tools (`browser.*`) are **off by default** (`browser: block`). Enabling 
 3. A **non-empty** `browser_hosts_allow` list matching each navigation URL
 
 URLs outside the allowlist are blocked at input validation. See [`connectors.md`](connectors.md) for tool reference and `pnpm exec playwright install`.
+
+## MCP and policy
+
+`mcp` defaults to `block` on new workspaces. Set `mcp: ask` and optionally `mcp_servers_allow` before using MCP tools. `mcp.tools.call` is classified as **external communication**; allow it only with `external_communication: ask` (or looser) in addition to a non-`block` `mcp` setting.
+
+MCP servers run as separate processes. Treat them as **high trust** and **high impact**: limit servers via `mcp.yaml`, use `tools_allow` / `tools_deny`, keep `external_communication` conservative, and rely on approvals for `mcp.tools.call`. Timeouts kill the session; large tool results spill to `mcp_tool_output` artifacts when they exceed per-server `maxOutputBytes`.
 
 ## Approval Prompt Format
 

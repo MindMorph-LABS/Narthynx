@@ -77,9 +77,29 @@ pnpm exec playwright install
 - Hosted browser grids or cloud browsers.
 - Replacing the mission runtime; Narthynx remains a **Mission Agent OS**, not a browser-only automation stack.
 
+## MCP connector (stdio)
+
+MCP integration uses the official [`@modelcontextprotocol/sdk`](https://www.npmjs.com/package/@modelcontextprotocol/sdk) client over **stdio** (spawned subprocess per operation). It is a **capability multiplier**: the child process may perform network, filesystem, or credential access even though Narthynx only sees stdin/stdout.
+
+### Workspace configuration
+
+- **`.narthynx/mcp.yaml`** — declares MCP servers (`id`, `command`, `args` without a shell, optional `cwd` under the workspace root, optional `env` **names** whose values are taken from the parent process environment, `timeoutMs`, `maxOutputBytes`, optional `tools_allow` / `tools_deny`).
+- **`policy.yaml`** — `mcp: block | ask` (default on new workspaces: `block`), optional `mcp_servers_allow` (when set, only those server ids may be used; `mcp.servers.list` is still allowed to help operators inspect config), optional `mcp_max_concurrent_sessions` (reserved; v1 uses one-shot sessions).
+
+### Typed tools
+
+| Tool | Role |
+| --- | --- |
+| `mcp.servers.list` | Lists configured servers, policy allow flag, and cached `tools/list` metadata paths under `.narthynx/.cache/mcp-tools/`. |
+| `mcp.tools.list` | Returns tools for a server (cache ~5 minutes, or `refresh: true` for a live handshake; refresh is blocked in **`safe`** policy mode). |
+| `mcp.tools.call` | Calls `tools/call` with `serverId`, `name`, and `arguments`. **High risk**, `external_comm` side effect: requires approval (or policy block), honors `external_communication`, bounded argument JSON size, and may write `mcp_tool_output` artifacts when results exceed `maxOutputBytes`. |
+
+Operator CLI: `narthynx mcp list` shows the same server/cache snapshot. `narthynx doctor` validates `mcp.yaml` and checks allowlist coherence when `mcp` is not `block` and `mcp_servers_allow` is set.
+
+
 ## Anti-Goals
 
-Phase 11 does not add mutating Git commands, raw shell strings, or hosted execution. **Phase 11** did not include browser automation; the **browser connector** is a later typed-tool slice (see above).
+Phase 11 does not add mutating Git commands, raw shell strings, or hosted execution. **Phase 11** did not include browser automation or MCP; the **browser** and **MCP** connectors are later typed-tool slices (see above).
 
 ## Event-to-mission triggers (ingress)
 
@@ -109,8 +129,8 @@ Browser tools are not used by the default Phase 13 graph; they are available to 
 
 ## Phase 14 Documentation Rules
 
-Connector docs and examples must describe implemented behavior only. Further connectors (for example deeper MCP, GitHub, email, calendar, hosted sync) remain incremental. **Browser automation** is implemented as typed `browser.*` tools with policy and tests (see Browser connector section).
+Connector docs and examples must describe implemented behavior only. Further connectors (GitHub, email, calendar, hosted sync, and deeper browser/MCP transports) remain incremental. **Browser automation** is implemented as typed `browser.*` tools with policy and tests (see Browser connector). **MCP (stdio)** is implemented as typed `mcp.*` tools (see MCP connector); remote transports and dynamic tool registration are future work.
 
 ## Phase 15 Mission Kit Is Not A Connector
 
-Templates, context diet, and proof cards are local mission primitives. Mission Kit does not bundle Playwright or headless browser execution; use typed `browser.*` tools when policy allows.
+Templates, context diet, and proof cards are local mission primitives. Mission Kit does not bundle Playwright, MCP servers, or headless execution; use typed `browser.*` or `mcp.*` tools when policy allows.
