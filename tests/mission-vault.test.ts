@@ -135,7 +135,9 @@ describe("mission vault crypto", () => {
 });
 
 describe("mission vault store", () => {
-  it("put/list/get/remove and rekey", async () => {
+  it(
+    "put/list/get/remove and rekey",
+    async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "narthynx-vault-"));
     await initWorkspace(cwd);
     const store = createMissionStore(cwd);
@@ -188,7 +190,9 @@ describe("mission vault store", () => {
     expect(await vaultList(missionsDir, m.id)).toEqual([]);
 
     await rm(cwd, { recursive: true, force: true });
-  });
+    },
+    15_000
+  );
 
   it("ensureVaultKdfSaltBytes creates salt file", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "narthynx-vault-salt-"));

@@ -1,0 +1,15 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Narthynx Icon White</title>
+  <desc id="desc">Angular N mark with connected mission nodes.</desc>
+  <g stroke="#FFFFFF" stroke-width="16" stroke-linecap="square" stroke-linejoin="miter">
+    <path d="M104 88V424L218 330"/>
+    <path d="M408 88V424L294 182"/>
+    <path d="M104 88L408 424"/>
+  </g>
+  <g stroke="#FFFFFF" stroke-width="12" stroke-linecap="square" stroke-linejoin="miter">
+    <path d="M176 242L336 303"/>
+    <path d="M176 242L130 280"/>
+  </g>
+  <circle cx="176" cy="242" r="16" fill="#0D1117" stroke="#FFFFFF" stroke-width="10"/>
+  <circle cx="336" cy="303" r="16" fill="#0D1117" stroke="#FFFFFF" stroke-width="10"/>
+</svg>

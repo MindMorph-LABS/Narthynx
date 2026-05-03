@@ -23,3 +23,11 @@ export function createArtifactId(): string {
 export function createTriggerEventId(): string {
   return `e_trig_${randomUUID()}`;
 }
+
+export function createDaemonJobId(): string {
+  return `qj_${randomUUID()}`;
+}
+
+export function createDaemonEventRowId(): string {
+  return `de_${randomUUID()}`;
+}

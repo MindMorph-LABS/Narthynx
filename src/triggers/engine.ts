@@ -3,6 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { resolveWorkspacePaths } from "../config/workspace";
+import { enqueueTriggerFollowupJob } from "../daemon/trigger-bridge";
 import { createMissionContextService } from "../missions/context";
 import { createMissionStore } from "../missions/store";
 import { createMissionInputFromTemplate } from "../missions/templates";
@@ -232,6 +233,17 @@ export async function ingestTriggerEvent(cwd: string, payload: IngestPayload): P
       payloadRef: payloadRefRelative,
       ...ghMeta
     });
+
+    try {
+      await enqueueTriggerFollowupJob(cwd, {
+        triggerEventId: eventId,
+        missionId: mission.id,
+        outcome: "matched"
+      });
+    } catch {
+      /* best-effort — queue may be full or disk issues */
+    }
+
     return { ok: true, eventId, outcome: "matched", missionId: mission.id, ruleId: matched.id, dedupKey };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Mission create failed";

@@ -49,7 +49,8 @@ export const DEFAULT_POLICY: WorkspacePolicy = {
   mcp: "block",
   mcp_max_concurrent_sessions: 1,
   github: "block",
-  vault: "block"
+  vault: "block",
+  daemon_background_actions: "draft_and_notify"
 };
 
 export function defaultConfigYaml(): string {

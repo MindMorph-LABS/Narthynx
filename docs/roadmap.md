@@ -2,6 +2,19 @@
 
 Narthynx is built in phases. Each phase must leave the repo runnable and testable, and later integrations must not jump ahead of the mission runtime.
 
+## Frontier vs connector phase IDs
+
+Roadmap **phase numbers** 16–18 below describe **connector** deliverables (browser, MCP, GitHub).
+
+**Frontier** build phases (daemon, companion, memory, etc.) use the numbering in [`AGENTS_APPENDIX_PHASE_16_30.md`](../AGENTS_APPENDIX_PHASE_16_30.md). When both appear in docs, use explicit labels—for example **Frontier F16 (daemon)** vs **Connector C16 (browser)**—to avoid confusion.
+
+| Label | Docs | What it is |
+| ----- | ---- | ----------- |
+| **Frontier F16** | [`docs/daemon.md`](daemon.md), appendix | Always-on localhost daemon (queue, events, schedules) |
+| **Connector C16** | Phase 16 below, [`docs/connectors.md`](connectors.md) | Browser (Playwright) connector |
+| **Connector C17** | Phase 17 below | MCP connector |
+| **Connector C18** | Phase 18 below | GitHub REST connector |
+
 ## Current Status
 
 - Phase 0: Complete
@@ -26,6 +39,7 @@ Narthynx is built in phases. Each phase must leave the repo runnable and testabl
 - Phase 16 (Browser connector): Partial (typed Playwright tools shipped; session reuse / CDP are future work)
 - Phase 17 (MCP connector): Partial — stdio client, `mcp.*` tools, policy + approvals; remote HTTP/SSE and mission-scoped session reuse are future work
 - Phase 18 (GitHub connector): Partial — REST `github.*` tools, `github.yaml`, policy + spillover artifacts; GitHub Apps and GraphQL are future work
+- **Frontier F16 (daemon):** Implemented — local process + lockfile, localhost API (`docs/daemon.md`), JSONL queue/events, schedules, CLI + slash commands; optional trigger → queue follow-up jobs
 
 ## Phases
 
