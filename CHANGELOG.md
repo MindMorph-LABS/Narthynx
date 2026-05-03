@@ -12,3 +12,4 @@
 - Add Phase 13 bounded mission executor with read-only steps, approval pause/resume, final reports, and replayable completion.
 - Add Phase 14 open-source polish: public docs, examples, GitHub templates, release checklist, and package metadata.
 - Add Phase 15 Mission Kit: templates, context diet (`context.md` / `context.json`), proof cards, and Phase 15.5 interactive terminal UX (NL-first shell, renderer abstraction, `/graph`, `/mode`, workspace notes, sensitive-path guard for `@`).
+- Add local web Mission Cockpit (`narthynx cockpit`): Hono API, Vite/React dashboard (missions, graph, ledger, replay, report, approvals), Bearer token auth, default loopback bind, optional LAN mode; see `docs/cockpit.md`.
