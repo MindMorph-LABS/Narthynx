@@ -11,6 +11,7 @@ import { resolveWorkspacePaths } from "../config/workspace";
 import { createArtifactStore, reportArtifactPath, writeOutputArtifact } from "../missions/artifacts";
 import { missionDirectory } from "../missions/store";
 import { browserTools } from "./browser";
+import { githubTools } from "./github";
 import { classifyCommandSafety, resolveWorkspaceCommandCwd } from "./command-safety";
 import { resolveGuardedWorkspacePath } from "./path-guard";
 import { cacheEntryFresh, readMcpToolsCache, writeMcpToolsCache } from "./mcp-cache";
@@ -594,7 +595,8 @@ export const builtinTools: ToolAction<unknown, unknown>[] = [
         resultBytes: bytes
       };
     }
-  }
+  },
+  ...githubTools
 ];
 
 async function loadPolicyOrThrow(cwd: string) {

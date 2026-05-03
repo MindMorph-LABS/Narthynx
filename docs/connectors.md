@@ -96,10 +96,41 @@ MCP integration uses the official [`@modelcontextprotocol/sdk`](https://www.npmj
 
 Operator CLI: `narthynx mcp list` shows the same server/cache snapshot. `narthynx doctor` validates `mcp.yaml` and checks allowlist coherence when `mcp` is not `block` and `mcp_servers_allow` is set.
 
+## GitHub connector (REST, Phase 18)
+
+Outbound **GitHub REST API** from inside a mission via typed `github.*` tools (`@octokit/rest`). This is separate from **triggers** ([`triggers.md`](triggers.md)): webhooks only create missions; they do not call these tools.
+
+### Auth and workspace files
+
+- **`GITHUB_TOKEN` or `GH_TOKEN`** in the process environment (fine-grained or classic PAT). Never store tokens in mission files.
+- **`.narthynx/github.yaml`** (optional): `defaultOwner`, `repos_allow` (`owner/repo` list), `baseUrl` for **GitHub Enterprise** (e.g. `https://github.example.com/api/v3`), `timeoutMs`, `maxResponseBytes`.
+- **`policy.yaml`**: `github: block | ask` (default **`block`**), optional `github_repos_allow`. When both policy and `github.yaml` set allowlists, the **effective** allowlist is their **intersection** (if both non-empty); most restrictive wins.
+
+Tools use the **`external_comm`** side effect: you need `external_communication: ask` (or looser) for API calls, in addition to `github: ask`.
+
+### Tools (v1)
+
+| Tool | Risk | Approval | Notes |
+| --- | --- | --- | --- |
+| `github.repos.get` | low | no | Repository metadata |
+| `github.issues.get` / `github.issues.list` / `github.issues.listComments` | low | no | Pagination capped in schemas |
+| `github.pulls.get` / `github.pulls.list` | low | no | |
+| `github.pulls.listFiles` | medium | no | |
+| `github.issues.create` | high | yes | Creates an issue |
+| `github.issues.createComment` | high | yes | |
+
+Outputs use `{ data, artifactPath?, truncated, resultBytes }`. Large JSON spills to an artifact typed `github_api_response` when over `maxResponseBytes`.
+
+`narthynx doctor` validates `github.yaml`, checks allowlist intersection when both sources define lists, and verifies a token is set when `github` is not `block`.
+
+### PAT scopes (guidance)
+
+- Read repos/issues/PRs: at least **read-only** scopes for the target repositories.
+- Create issues/comments: **`issues` write** (or Fine-grained “Issues” read/write on the repo).
 
 ## Anti-Goals
 
-Phase 11 does not add mutating Git commands, raw shell strings, or hosted execution. **Phase 11** did not include browser automation or MCP; the **browser** and **MCP** connectors are later typed-tool slices (see above).
+Phase 11 does not add mutating Git commands, raw shell strings, or hosted execution. **Phase 11** did not include browser automation, MCP, or the GitHub API connector; those are later typed-tool slices (see above).
 
 ## Event-to-mission triggers (ingress)
 
@@ -129,8 +160,8 @@ Browser tools are not used by the default Phase 13 graph; they are available to 
 
 ## Phase 14 Documentation Rules
 
-Connector docs and examples must describe implemented behavior only. Further connectors (GitHub, email, calendar, hosted sync, and deeper browser/MCP transports) remain incremental. **Browser automation** is implemented as typed `browser.*` tools with policy and tests (see Browser connector). **MCP (stdio)** is implemented as typed `mcp.*` tools (see MCP connector); remote transports and dynamic tool registration are future work.
+Connector docs and examples must describe implemented behavior only. Further connectors (email, calendar, hosted sync, and deeper browser/MCP/GitHub transports) remain incremental. **Browser**, **MCP (stdio)**, and **GitHub REST** are implemented as typed tools with policy, tests, and docs in this file.
 
 ## Phase 15 Mission Kit Is Not A Connector
 
-Templates, context diet, and proof cards are local mission primitives. Mission Kit does not bundle Playwright, MCP servers, or headless execution; use typed `browser.*` or `mcp.*` tools when policy allows.
+Templates, context diet, and proof cards are local mission primitives. Mission Kit does not bundle Playwright, MCP servers, GitHub clients, or headless execution; use typed `browser.*`, `mcp.*`, or `github.*` tools when policy allows.

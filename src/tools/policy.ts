@@ -45,6 +45,12 @@ export function classifyToolPolicy(
     }
   }
 
+  if (tool.name.startsWith("github.")) {
+    if (policy.github === "block") {
+      return block(tool, "GitHub tools are blocked by policy (github: block).");
+    }
+  }
+
   if (tool.name.startsWith("mcp.")) {
     if (policy.mcp === "block") {
       return block(tool, "MCP is blocked by policy (mcp: block).");

@@ -22,6 +22,7 @@ Narthynx is built in phases. Each phase must leave the repo runnable and testabl
 - Phase 15: Complete
 - Phase 16 (Browser connector): Partial (typed Playwright tools shipped; session reuse / CDP are future work)
 - Phase 17 (MCP connector): Partial — stdio client, `mcp.*` tools, policy + approvals; remote HTTP/SSE and mission-scoped session reuse are future work
+- Phase 18 (GitHub connector): Partial — REST `github.*` tools, `github.yaml`, policy + spillover artifacts; GitHub Apps and GraphQL are future work
 
 ## Phases
 
@@ -45,7 +46,8 @@ Narthynx is built in phases. Each phase must leave the repo runnable and testabl
 | 15 | Mission Kit | Complete | Add templates, context diet basics, proof cards, and Phase 15.5 interactive shell UX |
 | 16 | Browser connector (Playwright) | Partial | Typed `browser.*` tools, policy allowlist, approval + ledger, ephemeral sessions; install browsers via `pnpm exec playwright install` |
 | 17 | MCP connector (stdio) | Partial | Typed `mcp.*` tools, `.narthynx/mcp.yaml`, policy + approvals, tool-list cache, spillover artifacts; stdio only in v1 |
-| 16+ | Post-MVP SOTA Extensions | Post-MVP only | Deeper GitHub/email/calendar, advanced browser/MCP transports (session reuse, CDP, remote MCP), and other connectors after runtime hardening |
+| 18 | GitHub connector (REST) | Partial | Typed `github.*` tools, `.narthynx/github.yaml`, PAT via env, repo allowlists, spillover `github_api_response` artifacts |
+| 16+ | Post-MVP SOTA Extensions | Post-MVP only | Deeper email/calendar, GitHub App + GraphQL, advanced browser/MCP transports (session reuse, CDP, remote MCP), and other connectors after runtime hardening |
 
 ## MVP Success Definition
 
@@ -69,12 +71,12 @@ Do not start these before the MVP is complete and stable:
 - local web cockpit
 - visual mission graph
 - advanced browser/MCP transports (session reuse, CDP, remote MCP)
-- GitHub connector
+- GitHub App installs and GraphQL (beyond REST v1)
 - local model routing
 - cloud/local hybrid execution
 - safe team collaboration
 - encrypted mission vault
 
-**Event-to-mission triggers** (declarative rules, Event Memory, GitHub webhook on the Cockpit) are documented in [`docs/triggers.md`](triggers.md). They create missions only; they do not replace typed connectors or auto-execute the executor. The **browser connector** (typed `browser.*` tools, Phase 16) and **MCP connector** (typed `mcp.*` tools, Phase 17) are documented in [`docs/connectors.md`](connectors.md).
+**Event-to-mission triggers** (declarative rules, Event Memory, GitHub webhook on the Cockpit) are documented in [`docs/triggers.md`](triggers.md). They create missions only; they do not replace typed connectors or auto-execute the executor. The **browser** (Phase 16), **MCP** (Phase 17), and **GitHub REST** (Phase 18) connectors are documented in [`docs/connectors.md`](connectors.md).
 
 Post-MVP work must preserve the same invariants: local-first operation, durable state, typed tools, approval-gated risk, transparent ledgers, reports, and replay.
