@@ -19,7 +19,7 @@ Narthynx is built in phases. Each phase must leave the repo runnable and testabl
 - Phase 12: Complete
 - Phase 13: Complete
 - Phase 14: Complete
-- Phase 15: Complete
+- Phase 15: Complete (context diet engine: `context-diet.yaml`, model context pack, ledger `context.pack_built`, planner wiring when `cloud_model_sensitive_context: allow`; optional LLM summarization of context remains future work)
 - Phase 16 (Browser connector): Partial (typed Playwright tools shipped; session reuse / CDP are future work)
 - Phase 17 (MCP connector): Partial — stdio client, `mcp.*` tools, policy + approvals; remote HTTP/SSE and mission-scoped session reuse are future work
 - Phase 18 (GitHub connector): Partial — REST `github.*` tools, `github.yaml`, policy + spillover artifacts; GitHub Apps and GraphQL are future work

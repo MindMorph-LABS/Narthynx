@@ -3,6 +3,7 @@ import path from "node:path";
 
 import {
   CONFIG_FILE_NAME,
+  CONTEXT_DIET_FILE_NAME,
   GITHUB_FILE_NAME,
   MCP_FILE_NAME,
   MISSIONS_DIR_NAME,
@@ -11,6 +12,7 @@ import {
   defaultConfigYaml,
   defaultPolicyYaml
 } from "./defaults";
+import { loadContextDietConfig } from "./context-diet-config";
 import { loadGithubConfig, normalizeRepoAllowEntry } from "./github-config";
 import { getGithubAuthToken } from "./github-env";
 import { findMcpServer, loadMcpConfig } from "./mcp-config";
@@ -21,6 +23,7 @@ export interface WorkspacePaths {
   workspaceDir: string;
   configFile: string;
   policyFile: string;
+  contextDietFile: string;
   mcpFile: string;
   githubFile: string;
   mcpCacheDir: string;
@@ -55,6 +58,7 @@ export function resolveWorkspacePaths(cwd = process.cwd()): WorkspacePaths {
     workspaceDir,
     configFile: path.join(workspaceDir, CONFIG_FILE_NAME),
     policyFile: path.join(workspaceDir, POLICY_FILE_NAME),
+    contextDietFile: path.join(workspaceDir, CONTEXT_DIET_FILE_NAME),
     mcpFile: path.join(workspaceDir, MCP_FILE_NAME),
     githubFile: path.join(workspaceDir, GITHUB_FILE_NAME),
     mcpCacheDir: path.join(workspaceDir, ".cache", "mcp-tools"),
@@ -154,6 +158,18 @@ export async function doctorWorkspace(cwd = process.cwd()): Promise<DoctorResult
         : "policy.github_repos_allow and github.yaml repos_allow have no common entries (empty intersection)"
     });
   }
+
+  const dietConfig = await loadContextDietConfig(paths.contextDietFile);
+  const dietFileStat = await stat(paths.contextDietFile).catch(() => undefined);
+  checks.push({
+    name: "context diet yaml",
+    ok: dietConfig.ok,
+    message: !dietConfig.ok
+      ? `context-diet.yaml invalid: ${dietConfig.message}`
+      : dietFileStat?.isFile()
+        ? `context-diet.yaml OK (pack_max_bytes=${dietConfig.value.pack_max_bytes})`
+        : `no context-diet.yaml (defaults: pack_max_bytes=${dietConfig.value.pack_max_bytes})`
+  });
 
   if (policy.ok && mcpConfig.ok && policy.value.mcp !== "block" && policy.value.mcp_servers_allow !== undefined) {
     const allowed = new Set(policy.value.mcp_servers_allow);

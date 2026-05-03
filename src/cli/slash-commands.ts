@@ -1,3 +1,4 @@
+import { loadContextDietConfig } from "../config/context-diet-config";
 import { loadWorkspacePolicy } from "../config/load";
 import { doctorWorkspace, resolveWorkspacePaths } from "../config/workspace";
 import { createCostService } from "../agent/cost";
@@ -9,6 +10,7 @@ import { createReplayService } from "../missions/replay";
 import { createReportService } from "../missions/reports";
 import { createMissionStore } from "../missions/store";
 import { createMissionContextService } from "../missions/context";
+import { buildModelContextPack, listStaleContextEntries } from "../missions/context-diet";
 import { createProofCardService } from "../missions/proof-card";
 import { createMissionInputFromTemplate, listMissionTemplates } from "../missions/templates";
 import { createToolRegistry } from "../tools/registry";
@@ -339,6 +341,7 @@ async function handleContextCommand(
   stores: ReturnType<typeof createInteractiveStores>
 ): Promise<SlashCommandResult> {
   const parsed = parseContextArgs(args, context.currentMissionId);
+  const paths = resolveWorkspacePaths(context.cwd);
 
   if (parsed.note) {
     await stores.contextService.addNote(parsed.missionId, parsed.note);
@@ -354,7 +357,40 @@ async function handleContextCommand(
     return stay(parsed.missionId);
   }
 
-  context.renderer.rawBlock((await stores.contextService.renderContextSummary(parsed.missionId)).trimEnd());
+  const diet = await loadContextDietConfig(paths.contextDietFile);
+  if (!diet.ok) {
+    context.renderer.warn(`context-diet.yaml invalid: ${diet.message}`);
+    context.renderer.rawBlock((await stores.contextService.renderContextSummary(parsed.missionId)).trimEnd());
+    return stay(parsed.missionId);
+  }
+
+  const pack = await buildModelContextPack(parsed.missionId, context.cwd, { recordLedger: false });
+  const stale = await listStaleContextEntries(parsed.missionId, context.cwd);
+  const staleLines = stale.filter((s) => s.stale);
+
+  if (parsed.showPack) {
+    context.renderer.rawBlock(
+      [
+        `Pack budget: ${pack.totals.bytes}/${diet.value.pack_max_bytes} bytes (est. tokens ${pack.totals.estimatedTokens})`,
+        `Sensitive in pack: ${pack.sensitiveContextIncluded}`,
+        "",
+        pack.packText || "(empty pack)"
+      ].join("\n")
+    );
+    return stay(parsed.missionId);
+  }
+
+  const lines = [
+    (await stores.contextService.renderContextSummary(parsed.missionId)).trimEnd(),
+    "",
+    `[Pack] ${pack.totals.bytes}/${diet.value.pack_max_bytes} bytes · est. tokens ${pack.totals.estimatedTokens}${
+      diet.value.pack_max_estimated_tokens !== undefined ? ` / cap ${diet.value.pack_max_estimated_tokens}` : ""
+    }`,
+    staleLines.length > 0
+      ? `[Stale] ${staleLines.map((s) => `${s.type}:${s.source}`).join(", ")}`
+      : "[Stale] none"
+  ].join("\n");
+  context.renderer.rawBlock(lines);
   return stay(parsed.missionId);
 }
 
@@ -497,16 +533,17 @@ function parseMissionArgs(args: string[]): { templateName?: string; goal: string
 function parseContextArgs(
   args: string[],
   currentMissionId: string | undefined
-): { missionId: string; note?: string; file?: string; reason?: string } {
+): { missionId: string; note?: string; file?: string; reason?: string; showPack?: boolean } {
   let missionId: string | undefined;
   let note: string | undefined;
   let file: string | undefined;
   let reason: string | undefined;
+  let showPack = false;
 
   for (let index = 0; index < args.length; index += 1) {
     const value = args[index];
     if (value === "--note") {
-      const collected = collectFlagText(args, index + 1, ["--file", "--reason"]);
+      const collected = collectFlagText(args, index + 1, ["--file", "--reason", "--pack"]);
       note = collected.text;
       index = collected.nextIndex - 1;
     } else if (value === "--file") {
@@ -517,9 +554,11 @@ function parseContextArgs(
       file = next;
       index += 1;
     } else if (value === "--reason") {
-      const collected = collectFlagText(args, index + 1, ["--note", "--file"]);
+      const collected = collectFlagText(args, index + 1, ["--note", "--file", "--pack"]);
       reason = collected.text;
       index = collected.nextIndex - 1;
+    } else if (value === "--pack") {
+      showPack = true;
     } else if (!missionId) {
       missionId = value;
     } else {
@@ -539,7 +578,8 @@ function parseContextArgs(
     missionId: missionId ?? requireCurrentMission(currentMissionId),
     note,
     file,
-    reason
+    reason,
+    showPack
   };
 }
 

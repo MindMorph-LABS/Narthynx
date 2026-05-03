@@ -134,6 +134,7 @@ type LedgerEventType =
   | "model.called"
   | "cost.recorded"
   | "user.note"
+  | "context.pack_built"
   | "error";
 ```
 
@@ -147,6 +148,7 @@ Mission state remains local and inspectable:
 .narthynx/
   config.yaml
   policy.yaml
+  context-diet.yaml   # optional: model context pack caps and staleness
   missions/
     <mission-id>/
       mission.yaml
@@ -168,7 +170,9 @@ If a future change introduces a new mission file, it should be documented here a
 Phase 15 adds mission-native helpers without changing the core mission contract:
 
 - mission templates create ordinary missions with preset titles, goals, success criteria, risk hints, and the standard plan graph
-- context diet commands maintain human-readable `context.md` and structured `context.json`
+- context diet commands maintain human-readable `context.md` and structured `context.json` (with optional content hash, file mtime, and deduplication metadata)
+- optional workspace file `.narthynx/context-diet.yaml` caps and shapes the **model context pack** (truncation, staleness policy, optional inclusion of workspace notes) without rewriting stored `context.md`
+- the **model context pack** is a derived view: mission notes and allowed files (plus optional `workspace-notes.md`) merged under byte/token budgets; ledger event `context.pack_built` records sizes, omissions, and whether the pack was classified as sensitive
 - proof cards create compact Markdown artifacts at `artifacts/proof-card.md`
 
 These features must use existing mission stores, ledger events, artifacts, reports, and replay surfaces rather than bypassing persisted state.

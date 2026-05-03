@@ -230,6 +230,7 @@ export function createReadlineRenderer(io: InteractiveIo): Renderer {
           "/context [mission-id]",
           "/context --note <text>",
           "/context --file <path> --reason <text>",
+          "/context [mission-id] --pack",
           "",
           "Shortcuts",
           "! <command>                   shell.run (approval-gated)",

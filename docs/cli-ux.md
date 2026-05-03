@@ -64,6 +64,7 @@ Interactive mode supports:
 /context [mission-id]
 /context --note <text>
 /context --file <path> --reason <text>
+/context [mission-id] --pack
 /tool [mission-id] <tool-name> --input <json>
 /approve [approval-id] [--deny] [--reason <text>]
 /pause [mission-id]
@@ -87,6 +88,21 @@ Commands that accept `[mission-id]` use the current mission when the argument is
 `/run` executes the bounded Phase 13 mission executor slice. It advances the deterministic graph, runs read-only local tools, pauses for approval on the report artifact write, and resumes after `/approve` plus `/resume`.
 
 `/graph` prints the mission plan graph (nodes and edges) for the current or named mission.
+
+### Context diet and model pack
+
+`/context` (with no `--note` / `--file`) shows the mission context summary, a **pack budget** line (bytes used versus `pack_max_bytes` from `.narthynx/context-diet.yaml`, defaulting when the file is absent), and any **stale** file or note entries detected since attach time. Use `/context --pack` to print the full derived pack text (still local-only; use for inspection).
+
+Non-interactive parity:
+
+```bash
+narthynx context <mission-id>           # summary
+narthynx context <mission-id> --pack    # pack body + budget line
+narthynx context <mission-id> --pack --json
+narthynx context <mission-id> --prune-stale   # drop stale **file** rows from `context.json` and sync mission YAML file list
+```
+
+`narthynx doctor` validates `context-diet.yaml` when present. Optional keys include `pack_max_bytes`, `pack_max_estimated_tokens`, `file_truncation` (per-file caps in the pack only), `stale_policy` (`warn` | `omit_from_pack`), and `include_workspace_notes` (default off).
 
 ## Approvals
 

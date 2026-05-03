@@ -108,6 +108,7 @@ describe("interactive session", () => {
     expect(result.stdout).toContain("Context note added");
     expect(result.stdout).toContain("Context file attached");
     expect(result.stdout).toContain("estimated tokens:");
+    expect(result.stdout).toContain("[Pack]");
     expect(result.stdout).toContain("Proof card created");
   });
 

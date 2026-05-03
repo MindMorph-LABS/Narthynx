@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -19,7 +20,19 @@ const contextEntrySchema = z.object({
   source: z.string(),
   reason: z.string(),
   bytes: z.number().int().nonnegative(),
-  addedAt: z.string().datetime()
+  addedAt: z.string().datetime(),
+  contentSha256: z
+    .string()
+    .length(64)
+    .regex(/^[a-f0-9]+$/)
+    .optional(),
+  sourceMtimeMs: z.number().optional(),
+  role: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  inlineBytes: z.number().int().nonnegative().optional(),
+  originalBytes: z.number().int().nonnegative().optional(),
+  duplicateOf: z.string().optional(),
+  refCount: z.number().int().positive().optional()
 });
 
 const contextIndexSchema = z.object({
@@ -40,6 +53,24 @@ export interface ContextSummary {
   path: string;
 }
 
+export function estimateTokensFromBytes(bytes: number): number {
+  return Math.ceil(bytes / 4);
+}
+
+export function sha256Utf8(text: string): string {
+  return createHash("sha256").update(text, "utf8").digest("hex");
+}
+
+export async function readMissionContextIndex(cwd: string, missionId: string): Promise<ContextIndex> {
+  const paths = resolveWorkspacePaths(cwd);
+  return readContextIndexFromPaths(paths.missionsDir, missionId);
+}
+
+export async function writeMissionContextIndex(cwd: string, index: ContextIndex): Promise<void> {
+  const paths = resolveWorkspacePaths(cwd);
+  await writeContextIndexToPaths(paths.missionsDir, index);
+}
+
 export function createMissionContextService(cwd = process.cwd()) {
   const paths = resolveWorkspacePaths(cwd);
   const missionStore = createMissionStore(cwd);
@@ -47,14 +78,14 @@ export function createMissionContextService(cwd = process.cwd()) {
   return {
     async summarizeContext(missionId: string): Promise<ContextSummary> {
       await missionStore.readMission(missionId);
-      const index = await readContextIndex(missionId);
+      const index = await readContextIndexFromPaths(paths.missionsDir, missionId);
       const bytes = index.entries.reduce((total, entry) => total + entry.bytes, 0);
       return {
         missionId,
         notes: index.entries.filter((entry) => entry.type === "note").length,
         files: index.entries.filter((entry) => entry.type === "file").length,
         bytes,
-        estimatedTokens: estimateTokens(bytes),
+        estimatedTokens: estimateTokensFromBytes(bytes),
         entries: index.entries,
         path: contextFilePath(missionId)
       };
@@ -71,7 +102,11 @@ export function createMissionContextService(cwd = process.cwd()) {
         `estimated tokens: ${summary.estimatedTokens}`,
         "sources:",
         ...listOrFallback(
-          summary.entries.map((entry) => `- ${entry.type}: ${entry.source} (${entry.reason}, ${entry.bytes} bytes)`),
+          summary.entries.map((entry) => {
+            const dup = entry.duplicateOf ? ` duplicateOf=${entry.duplicateOf}` : "";
+            const hash = entry.contentSha256 ? ` sha256=${entry.contentSha256.slice(0, 12)}…` : "";
+            return `- ${entry.type}: ${entry.source} (${entry.reason}, ${entry.bytes} bytes)${hash}${dup}`;
+          }),
           "No context entries recorded."
         )
       ].join("\n");
@@ -86,12 +121,63 @@ export function createMissionContextService(cwd = process.cwd()) {
       const mission = await missionStore.readMission(missionId);
       const now = new Date().toISOString();
       const bytes = Buffer.byteLength(trimmed, "utf8");
+      const hash = sha256Utf8(trimmed);
+      const indexBefore = await readContextIndexFromPaths(paths.missionsDir, missionId);
+
+      const canonicalIndex = indexBefore.entries.findIndex(
+        (candidate) =>
+          candidate.type === "note" && candidate.contentSha256 === hash && !candidate.duplicateOf
+      );
+
+      if (canonicalIndex >= 0) {
+        const canonical = indexBefore.entries[canonicalIndex];
+        const updatedCanonical: ContextEntry = {
+          ...canonical,
+          refCount: (canonical.refCount ?? 1) + 1
+        };
+        const dupEntry: ContextEntry = {
+          type: "note",
+          source: "mission-note",
+          reason: "user note (same content as earlier note)",
+          bytes: 0,
+          addedAt: now,
+          contentSha256: hash,
+          duplicateOf: `note:${canonical.addedAt}`
+        };
+        const nextEntries = [...indexBefore.entries];
+        nextEntries[canonicalIndex] = updatedCanonical;
+        nextEntries.push(dupEntry);
+        const updatedIndex = contextIndexSchema.parse({ missionId, entries: nextEntries });
+        await writeContextIndexToPaths(paths.missionsDir, updatedIndex);
+
+        await appendContextMarkdown(missionId, [`## Note (duplicate) - ${now}`, "", `Same content as note at ${canonical.addedAt}.`, ""]);
+
+        await mirrorMissionContext(mission, {
+          notes: [...mission.context.notes, trimmed],
+          files: mission.context.files
+        });
+        await appendLedgerEvent(ledgerPath(missionId), {
+          missionId,
+          type: "user.note",
+          summary: "Context note added (deduplicated by content hash).",
+          details: {
+            bytes,
+            contextEntries: updatedIndex.entries.length,
+            duplicateOf: canonical.addedAt
+          },
+          timestamp: now
+        });
+
+        return this.summarizeContext(missionId);
+      }
+
       const entry: ContextEntry = {
         type: "note",
         source: "mission-note",
         reason: "user note",
         bytes,
-        addedAt: now
+        addedAt: now,
+        contentSha256: hash
       };
 
       await appendContextMarkdown(missionId, [`## Note - ${now}`, "", trimmed, ""]);
@@ -135,29 +221,123 @@ export function createMissionContextService(cwd = process.cwd()) {
       const content = await readFile(guarded.absolutePath, "utf8");
       const now = new Date().toISOString();
       const bytes = Buffer.byteLength(content, "utf8");
+      const hash = sha256Utf8(content);
+      const sourceMtimeMs = Math.trunc(target.mtimeMs);
+
+      const indexBefore = await readContextIndexFromPaths(paths.missionsDir, missionId);
+      const samePathIndex = indexBefore.entries.findIndex(
+        (candidate) => candidate.type === "file" && candidate.source === guarded.relativePath
+      );
+
+      if (samePathIndex >= 0) {
+        const updatedEntry: ContextEntry = {
+          type: "file",
+          source: guarded.relativePath,
+          reason: trimmedReason,
+          bytes,
+          addedAt: now,
+          contentSha256: hash,
+          sourceMtimeMs
+        };
+        const nextEntries = [...indexBefore.entries];
+        nextEntries[samePathIndex] = updatedEntry;
+        const updated = contextIndexSchema.parse({ missionId, entries: nextEntries });
+        await writeContextIndexToPaths(paths.missionsDir, updated);
+
+        await mirrorMissionContext(mission, {
+          notes: mission.context.notes,
+          files: [...mission.context.files.filter((file) => file !== guarded.relativePath), guarded.relativePath]
+        });
+        await appendLedgerEvent(ledgerPath(missionId), {
+          missionId,
+          type: "user.note",
+          summary: `Context file re-attached: ${guarded.relativePath}`,
+          details: {
+            path: guarded.relativePath,
+            reason: trimmedReason,
+            bytes,
+            duplicate: true
+          },
+          timestamp: now
+        });
+
+        return this.summarizeContext(missionId);
+      }
+
+      const canonicalFile = indexBefore.entries.find(
+        (candidate) =>
+          candidate.type === "file" && candidate.contentSha256 === hash && !candidate.duplicateOf
+      );
+
+      if (canonicalFile) {
+        const dupEntry: ContextEntry = {
+          type: "file",
+          source: guarded.relativePath,
+          reason: trimmedReason,
+          bytes: 0,
+          addedAt: now,
+          contentSha256: hash,
+          sourceMtimeMs,
+          duplicateOf: canonicalFile.source
+        };
+        const updatedCanonical: ContextEntry = {
+          ...canonicalFile,
+          refCount: (canonicalFile.refCount ?? 1) + 1
+        };
+        const replaced = indexBefore.entries.map((e) =>
+          e.type === "file" && e.source === canonicalFile.source ? updatedCanonical : e
+        );
+        const withDup = [...replaced, dupEntry];
+        const updated = contextIndexSchema.parse({ missionId, entries: withDup });
+        await writeContextIndexToPaths(paths.missionsDir, updated);
+
+        await appendContextMarkdown(missionId, [
+          `## File (duplicate content) - ${guarded.relativePath}`,
+          "",
+          `Same bytes as \`${canonicalFile.source}\` (sha256 \`${hash.slice(0, 12)}…\`).`,
+          ""
+        ]);
+
+        await mirrorMissionContext(mission, {
+          notes: mission.context.notes,
+          files: [...mission.context.files.filter((file) => file !== guarded.relativePath), guarded.relativePath]
+        });
+        await appendLedgerEvent(ledgerPath(missionId), {
+          missionId,
+          type: "user.note",
+          summary: `Context file attached (deduplicated by hash): ${guarded.relativePath}`,
+          details: {
+            path: guarded.relativePath,
+            canonicalPath: canonicalFile.source,
+            bytes: 0
+          },
+          timestamp: now
+        });
+
+        return this.summarizeContext(missionId);
+      }
+
       const entry: ContextEntry = {
         type: "file",
         source: guarded.relativePath,
         reason: trimmedReason,
         bytes,
-        addedAt: now
+        addedAt: now,
+        contentSha256: hash,
+        sourceMtimeMs
       };
-      const indexBefore = await readContextIndex(missionId);
-      const duplicate = indexBefore.entries.some((candidate) => candidate.type === "file" && candidate.source === guarded.relativePath);
 
-      if (!duplicate) {
-        await appendContextMarkdown(missionId, [
-          `## File - ${guarded.relativePath}`,
-          "",
-          `Reason: ${trimmedReason}`,
-          `Bytes: ${bytes}`,
-          "",
-          "```txt",
-          content,
-          "```",
-          ""
-        ]);
-      }
+      await appendContextMarkdown(missionId, [
+        `## File - ${guarded.relativePath}`,
+        "",
+        `Reason: ${trimmedReason}`,
+        `Bytes: ${bytes}`,
+        "",
+        "```txt",
+        content,
+        "```",
+        ""
+      ]);
 
       await upsertContextEntry(missionId, entry, true);
       await mirrorMissionContext(mission, {
@@ -167,12 +347,12 @@ export function createMissionContextService(cwd = process.cwd()) {
       await appendLedgerEvent(ledgerPath(missionId), {
         missionId,
         type: "user.note",
-        summary: duplicate ? `Context file already attached: ${guarded.relativePath}` : `Context file attached: ${guarded.relativePath}`,
+        summary: `Context file attached: ${guarded.relativePath}`,
         details: {
           path: guarded.relativePath,
           reason: trimmedReason,
           bytes,
-          duplicate
+          duplicate: false
         },
         timestamp: now
       });
@@ -189,37 +369,16 @@ export function createMissionContextService(cwd = process.cwd()) {
     return path.join(missionDir(missionId), CONTEXT_FILE_NAME);
   }
 
-  function contextIndexPath(missionId: string): string {
-    return path.join(missionDir(missionId), CONTEXT_INDEX_FILE_NAME);
-  }
-
   function ledgerPath(missionId: string): string {
     return ledgerFilePath(missionDir(missionId));
   }
 
   async function readContextIndex(missionId: string): Promise<ContextIndex> {
-    const filePath = contextIndexPath(missionId);
-    try {
-      const raw = await readFile(filePath, "utf8");
-      return contextIndexSchema.parse(JSON.parse(raw));
-    } catch (error) {
-      const code = error instanceof Error && "code" in error ? String(error.code) : "";
-      if (code === "ENOENT") {
-        return {
-          missionId,
-          entries: []
-        };
-      }
-
-      const message = error instanceof Error ? error.message : "Unknown context read failure";
-      throw new Error(`Failed to read context index at ${filePath}: ${message}`);
-    }
+    return readContextIndexFromPaths(paths.missionsDir, missionId);
   }
 
   async function writeContextIndex(index: ContextIndex): Promise<void> {
-    const filePath = contextIndexPath(index.missionId);
-    await mkdir(path.dirname(filePath), { recursive: true });
-    await writeFile(filePath, `${JSON.stringify(contextIndexSchema.parse(index), null, 2)}\n`, "utf8");
+    await writeContextIndexToPaths(paths.missionsDir, index);
   }
 
   async function upsertContextEntry(missionId: string, entry: ContextEntry, dedupeBySource: boolean): Promise<ContextIndex> {
@@ -252,8 +411,29 @@ export function createMissionContextService(cwd = process.cwd()) {
   }
 }
 
-function estimateTokens(bytes: number): number {
-  return Math.ceil(bytes / 4);
+async function readContextIndexFromPaths(missionsDir: string, missionId: string): Promise<ContextIndex> {
+  const filePath = path.join(missionDirectory(missionsDir, missionId), CONTEXT_INDEX_FILE_NAME);
+  try {
+    const raw = await readFile(filePath, "utf8");
+    return contextIndexSchema.parse(JSON.parse(raw));
+  } catch (error) {
+    const code = error instanceof Error && "code" in error ? String((error as NodeJS.ErrnoException).code) : "";
+    if (code === "ENOENT") {
+      return {
+        missionId,
+        entries: []
+      };
+    }
+
+    const message = error instanceof Error ? error.message : "Unknown context read failure";
+    throw new Error(`Failed to read context index at ${filePath}: ${message}`);
+  }
+}
+
+async function writeContextIndexToPaths(missionsDir: string, index: ContextIndex): Promise<void> {
+  const filePath = path.join(missionDirectory(missionsDir, index.missionId), CONTEXT_INDEX_FILE_NAME);
+  await mkdir(path.dirname(filePath), { recursive: true });
+  await writeFile(filePath, `${JSON.stringify(contextIndexSchema.parse(index), null, 2)}\n`, "utf8");
 }
 
 function listOrFallback(values: string[], fallback: string): string[] {
