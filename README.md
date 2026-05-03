@@ -326,7 +326,7 @@ Post-MVP exploration:
 - deeper context diet / memory engine
 - cloud/local hybrid execution
 - safe team collaboration
-- encrypted mission vault
+- Phase 15d encrypted mission vault (CLI `narthynx vault`, tool `vault.read`, **`docs/vault.md`**)
 
 See `docs/roadmap.md` for the phase table.
 

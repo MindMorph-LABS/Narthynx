@@ -9,6 +9,8 @@ export const MCP_FILE_NAME = "mcp.yaml";
 export const GITHUB_FILE_NAME = "github.yaml";
 export const CONTEXT_DIET_FILE_NAME = "context-diet.yaml";
 export const MISSIONS_DIR_NAME = "missions";
+/** Hex-encoded 32-byte salt for per-workspace vault KDF binding. */
+export const VAULT_KDF_SALT_FILE_NAME = "vault-kdf.salt";
 
 export const DEFAULT_CONFIG = {
   workspace_version: 1,
@@ -46,7 +48,8 @@ export const DEFAULT_POLICY: WorkspacePolicy = {
   browser_max_steps_per_session: 50,
   mcp: "block",
   mcp_max_concurrent_sessions: 1,
-  github: "block"
+  github: "block",
+  vault: "block"
 };
 
 export function defaultConfigYaml(): string {

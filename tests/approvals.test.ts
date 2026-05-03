@@ -123,6 +123,18 @@ describe("tool policy classifier", () => {
     ).toBe("approval");
   });
 
+  it("blocks vault.read when vault policy is block", () => {
+    const registry = createToolRegistry();
+    const vaultTool = registry.get("vault.read");
+    expect(classifyToolPolicy(vaultTool, DEFAULT_POLICY).action).toBe("block");
+    expect(
+      classifyToolPolicy(vaultTool, { ...DEFAULT_POLICY, vault: "ask" as const }).action
+    ).toBe("approval");
+    expect(
+      classifyToolPolicy(vaultTool, { ...DEFAULT_POLICY, vault: "allow" as const }).action
+    ).toBe("allow");
+  });
+
   it("supports policy file mode changes through the default policy shape", async () => {
     const cwd = await tempWorkspaceRoot();
     await initWorkspace(cwd);

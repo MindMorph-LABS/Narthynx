@@ -32,6 +32,7 @@ export const ledgerEventTypeSchema = z.enum([
   "cost.recorded",
   "user.note",
   "context.pack_built",
+  "vault.secret_read",
   "error"
 ]);
 

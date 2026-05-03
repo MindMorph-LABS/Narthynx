@@ -15,7 +15,7 @@ Narthynx must not weaken these defaults:
 - every approval must be recorded
 - every high-risk action must have a checkpoint
 - no secrets should be sent to cloud models without explicit policy permission
-- `.env`, SSH keys, token files, and credential stores must not be read unless a future explicit vault workflow exists
+- `.env`, SSH keys, token files, and credential stores must not be read by ordinary tools; use the **encrypted mission vault** (see [`vault.md`](vault.md)) for stored secrets and gate access with **`vault.read`** and **`vault`** policy.
 
 ## Risk Levels
 
@@ -67,7 +67,12 @@ browser_max_steps_per_session: 50
 mcp: block
 mcp_max_concurrent_sessions: 1
 github: block
+vault: block
 ```
+
+## Encrypted mission vault
+
+Per-mission secrets live under **`.narthynx/missions/<id>/vault/`** as encrypted **`.nxc`** blobs; the workspace file **`.narthynx/vault-kdf.salt`** binds KDF output to this workspace. CLI: `narthynx vault …`. Runtime reads use **`vault.read`**; **`policy.yaml`** key **`vault`** is **`block` | `ask` | `allow`** (default **`block`**). Ledger **`vault.secret_read`** records fingerprints only, not cleartext. Full detail: [`vault.md`](vault.md).
 
 ## Workspace identity (collaboration audit)
 

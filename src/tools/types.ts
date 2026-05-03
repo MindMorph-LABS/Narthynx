@@ -2,7 +2,15 @@ import type { z } from "zod";
 
 import type { RiskLevel } from "../missions/schema";
 
-export type ToolSideEffect = "none" | "local_read" | "local_write" | "shell" | "network" | "external_comm" | "credential";
+export type ToolSideEffect =
+  | "none"
+  | "local_read"
+  | "local_write"
+  | "shell"
+  | "network"
+  | "external_comm"
+  | "credential"
+  | "vault";
 
 export interface ToolContext {
   cwd: string;

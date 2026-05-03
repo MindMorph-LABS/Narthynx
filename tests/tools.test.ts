@@ -60,7 +60,8 @@ describe("tool registry", () => {
       "mcp.tools.call",
       "mcp.tools.list",
       "report.write",
-      "shell.run"
+      "shell.run",
+      "vault.read"
     ]);
     expect(tools.map((tool) => `${tool.name}:${tool.sideEffect}:${tool.riskLevel}:${tool.requiresApproval}`)).toContain(
       "report.write:local_write:medium:true"

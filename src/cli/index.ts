@@ -16,6 +16,7 @@ import { resolveWorkspaceActor } from "../config/identity-config";
 import { doctorWorkspace, initWorkspace, resolveWorkspacePaths } from "../config/workspace";
 import { runCockpitServer, resolveCockpitPort } from "../cockpit/serve";
 import { runInteractiveSession } from "./interactive";
+import { attachVaultCommands } from "./vault-cmd";
 import { createApprovalStore } from "../missions/approvals";
 import { createCheckpointStore } from "../missions/checkpoints";
 import { createReplayService } from "../missions/replay";
@@ -57,7 +58,8 @@ export const CLI_COMMANDS = [
   "resume",
   "replay",
   "doctor",
-  "triggers"
+  "triggers",
+  "vault"
 ] as const;
 
 export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
@@ -85,6 +87,7 @@ export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
     | "replay"
     | "doctor"
     | "triggers"
+    | "vault"
   > =>
     name !== "init" &&
     name !== "mission" &&
@@ -107,7 +110,8 @@ export const PLACEHOLDER_COMMANDS = CLI_COMMANDS.filter(
     name !== "resume" &&
     name !== "replay" &&
     name !== "doctor" &&
-    name !== "triggers"
+    name !== "triggers" &&
+    name !== "vault"
 );
 
 export interface CliResult {
@@ -225,6 +229,8 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
 
       io.writeOut("Workspace is healthy.\n");
     });
+
+  attachVaultCommands(program, cwd, io);
 
   const mcpProgram = program.command("mcp").description("MCP connector helpers (stdio servers).");
 

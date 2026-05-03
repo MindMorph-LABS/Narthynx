@@ -107,6 +107,8 @@ export function renderReplayEvent(event: LedgerEvent): string {
       return renderCostRecorded(event);
     case "user.note":
       return renderUserNote(event);
+    case "vault.secret_read":
+      return renderVaultSecretRead(event);
     case "error":
       return `Error: ${event.summary}`;
     default:
@@ -248,6 +250,11 @@ function renderUserNote(event: LedgerEvent): string {
   }
 
   return `User note: ${event.summary}${actor}`;
+}
+
+function renderVaultSecretRead(event: LedgerEvent): string {
+  const fp = stringDetail(event.details, "entryFingerprint");
+  return fp ? `Vault secret read (redacted; fingerprint ${fp})` : "Vault secret read (redacted)";
 }
 
 function formatActorSuffix(details: Record<string, unknown> | undefined): string {
