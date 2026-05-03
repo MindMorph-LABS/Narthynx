@@ -60,7 +60,21 @@ filesystem:
 external_communication: block
 credentials: block
 cloud_model_sensitive_context: ask
+browser: block
+browser_hosts_allow: []
+browser_max_navigation_ms: 30000
+browser_max_steps_per_session: 50
 ```
+
+## Browser tools and policy
+
+Browser tools (`browser.*`) are **off by default** (`browser: block`). Enabling them requires:
+
+1. `browser: ask` (or future modes that allow browser classification)
+2. `allow_network: true`
+3. A **non-empty** `browser_hosts_allow` list matching each navigation URL
+
+URLs outside the allowlist are blocked at input validation. See [`connectors.md`](connectors.md) for tool reference and `pnpm exec playwright install`.
 
 ## Approval Prompt Format
 

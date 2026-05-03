@@ -9,6 +9,7 @@ import { loadWorkspacePolicy } from "../config/load";
 import { resolveWorkspacePaths } from "../config/workspace";
 import { createArtifactStore, reportArtifactPath, writeOutputArtifact } from "../missions/artifacts";
 import { missionDirectory } from "../missions/store";
+import { browserTools } from "./browser";
 import { classifyCommandSafety, resolveWorkspaceCommandCwd } from "./command-safety";
 import { resolveGuardedWorkspacePath } from "./path-guard";
 import type { ToolAction } from "./types";
@@ -360,7 +361,8 @@ export const builtinTools: ToolAction<unknown, unknown>[] = [
         bytesWritten: Buffer.byteLength(parsed.content, "utf8")
       };
     }
-  }
+  },
+  ...browserTools
 ];
 
 async function loadPolicyOrThrow(cwd: string) {

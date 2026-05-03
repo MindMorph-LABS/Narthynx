@@ -1,11 +1,12 @@
 import type { z } from "zod";
 
-import { loadWorkspacePolicy } from "../config/load";
+import { loadWorkspacePolicy, type WorkspacePolicy } from "../config/load";
 import { resolveWorkspacePaths } from "../config/workspace";
 import { createApprovalStore } from "../missions/approvals";
 import { createCheckpointStore } from "../missions/checkpoints";
 import { appendLedgerEvent, ledgerFilePath } from "../missions/ledger";
 import { createMissionStore, missionDirectory } from "../missions/store";
+import { extractBrowserUrlsFromInput, isBrowserToolName, classifyBrowserInputSafety } from "./browser-guard";
 import { classifyShellRunInputSafety, shellRunApprovalTarget } from "./command-safety";
 import { classifyToolPolicy } from "./policy";
 import { createToolRegistry, type ToolRegistry } from "./registry";
@@ -61,7 +62,7 @@ export function createToolRunner(options: ToolRunnerOptions = {}) {
         return { ok: false, toolName: tool.name, message, blocked: false };
       }
 
-      const inputSafety = classifyToolInputSafety(tool.name, input.data, paths.rootDir);
+      const inputSafety = classifyToolInputSafety(tool.name, input.data, paths.rootDir, policy.value);
       if (!inputSafety.ok) {
         const message = inputSafety.reason ?? `${tool.name} input is blocked by safety policy.`;
         await appendDenied(ledgerPath, request, message, "blocked");
@@ -123,11 +124,11 @@ export function createToolRunner(options: ToolRunnerOptions = {}) {
         };
       }
 
-      if (approval.toolName !== "filesystem.write" && approval.toolName !== "report.write" && approval.toolName !== "shell.run") {
+      if (!isApprovalContinuationTool(approval.toolName)) {
         return {
           ok: false,
           toolName: approval.toolName,
-          message: `${approval.toolName} continuation is not implemented in Phase 11.`,
+          message: `${approval.toolName} continuation is not implemented for this tool.`,
           blocked: true,
           approvalId
         };
@@ -141,7 +142,14 @@ export function createToolRunner(options: ToolRunnerOptions = {}) {
         return { ok: false, toolName: tool.name, message, blocked: false, approvalId };
       }
 
-      const inputSafety = classifyToolInputSafety(tool.name, input.data, paths.rootDir);
+      const policyReload = await loadWorkspacePolicy(paths.policyFile);
+      if (!policyReload.ok) {
+        const message = `policy.yaml invalid: ${policyReload.message}`;
+        await appendFailed(ledgerPath, { missionId: approval.missionId, toolName: tool.name, input: approval.toolInput }, message);
+        return { ok: false, toolName: tool.name, message, blocked: false, approvalId };
+      }
+
+      const inputSafety = classifyToolInputSafety(tool.name, input.data, paths.rootDir, policyReload.value);
       if (!inputSafety.ok) {
         const message = inputSafety.reason ?? `${tool.name} input is blocked by safety policy.`;
         await appendFailed(ledgerPath, { missionId: approval.missionId, toolName: tool.name, input: approval.toolInput }, message, true);
@@ -282,9 +290,19 @@ function formatZodError(error: z.ZodError): string {
   return error.issues.map((issue) => `${issue.path.join(".") || "input"}: ${issue.message}`).join("; ");
 }
 
-function classifyToolInputSafety(toolName: string, input: unknown, rootDir: string): { ok: boolean; reason?: string } {
+function classifyToolInputSafety(
+  toolName: string,
+  input: unknown,
+  rootDir: string,
+  policy: WorkspacePolicy
+): { ok: boolean; reason?: string } {
   if (toolName === "shell.run") {
     return classifyShellRunInputSafety(input, rootDir);
+  }
+
+  if (isBrowserToolName(toolName)) {
+    const r = classifyBrowserInputSafety(toolName, input, policy);
+    return r.ok ? { ok: true } : { ok: false, reason: r.reason };
   }
 
   return { ok: true };
@@ -295,10 +313,24 @@ function approvalTargetForTool(toolName: string, input: unknown): string | undef
     return shellRunApprovalTarget(input);
   }
 
+  if (isBrowserToolName(toolName)) {
+    const urls = extractBrowserUrlsFromInput(toolName, input);
+    return urls[0];
+  }
+
   if (typeof input === "object" && input !== null && "path" in input) {
     const value = (input as { path?: unknown }).path;
     return typeof value === "string" ? value : undefined;
   }
 
   return undefined;
+}
+
+function isApprovalContinuationTool(toolName: string): boolean {
+  return (
+    toolName === "filesystem.write" ||
+    toolName === "report.write" ||
+    toolName === "shell.run" ||
+    isBrowserToolName(toolName)
+  );
 }

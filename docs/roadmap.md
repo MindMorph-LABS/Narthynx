@@ -20,6 +20,7 @@ Narthynx is built in phases. Each phase must leave the repo runnable and testabl
 - Phase 13: Complete
 - Phase 14: Complete
 - Phase 15: Complete
+- Phase 16 (Browser connector): Partial (typed Playwright tools shipped; session reuse / CDP are future work)
 
 ## Phases
 
@@ -41,7 +42,8 @@ Narthynx is built in phases. Each phase must leave the repo runnable and testabl
 | 13 | Mission Executor Vertical Slice | Complete | Run the MVP flow end to end |
 | 14 | Open-Source Polish | Complete | Prepare public repo quality, examples, docs, issue templates, and release checklist |
 | 15 | Mission Kit | Complete | Add templates, context diet basics, proof cards, and Phase 15.5 interactive shell UX |
-| 16+ | Post-MVP SOTA Extensions | Post-MVP only | Explore advanced connectors and cockpit features after Mission Kit primitives |
+| 16 | Browser connector (Playwright) | Partial | Typed `browser.*` tools, policy allowlist, approval + ledger, ephemeral sessions; install browsers via `pnpm exec playwright install` |
+| 16+ | Post-MVP SOTA Extensions | Post-MVP only | MCP, deeper GitHub/email/calendar, session reuse, CDP attach, and other connectors after runtime hardening |
 
 ## MVP Success Definition
 
@@ -64,7 +66,6 @@ Do not start these before the MVP is complete and stable:
 
 - local web cockpit
 - visual mission graph
-- browser connector
 - MCP connector
 - GitHub connector
 - local model routing
@@ -72,6 +73,6 @@ Do not start these before the MVP is complete and stable:
 - safe team collaboration
 - encrypted mission vault
 
-**Event-to-mission triggers** (declarative rules, Event Memory, GitHub webhook on the Cockpit) are documented in [`docs/triggers.md`](triggers.md). They create missions only; they do not replace typed connectors or auto-execute the executor.
+**Event-to-mission triggers** (declarative rules, Event Memory, GitHub webhook on the Cockpit) are documented in [`docs/triggers.md`](triggers.md). They create missions only; they do not replace typed connectors or auto-execute the executor. The **browser connector** (typed `browser.*` tools, Phase 16) is documented in [`docs/connectors.md`](connectors.md).
 
 Post-MVP work must preserve the same invariants: local-first operation, durable state, typed tools, approval-gated risk, transparent ledgers, reports, and replay.

@@ -12,11 +12,20 @@ import { missionDirectory, missionFilePath } from "./store";
 
 export const ARTIFACTS_DIR_NAME = "artifacts";
 export const OUTPUTS_DIR_NAME = "outputs";
+export const SCREENSHOTS_DIR_NAME = "screenshots";
 
 export const artifactSchema = z.object({
   id: z.string().regex(/^art_[a-z0-9_-]+$/),
   missionId: z.string().regex(/^m_[a-z0-9_-]+$/),
-  type: z.enum(["report", "command_output", "git_diff", "git_log", "proof_card"]),
+  type: z.enum([
+    "report",
+    "command_output",
+    "git_diff",
+    "git_log",
+    "proof_card",
+    "browser_screenshot",
+    "browser_snapshot"
+  ]),
   path: z.string().min(1),
   title: z.string().min(1),
   createdAt: z.string().datetime(),
@@ -57,6 +66,10 @@ export function reportArtifactPath(missionDir: string): string {
 
 export function outputsDirPath(missionDir: string): string {
   return path.join(artifactsDirPath(missionDir), OUTPUTS_DIR_NAME);
+}
+
+export function screenshotsDirPath(missionDir: string): string {
+  return path.join(artifactsDirPath(missionDir), SCREENSHOTS_DIR_NAME);
 }
 
 export function createArtifactStore(cwd = process.cwd()): ArtifactStore {

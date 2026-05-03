@@ -1,5 +1,7 @@
 import YAML from "yaml";
 
+import type { WorkspacePolicy } from "./load";
+
 export const WORKSPACE_DIR_NAME = ".narthynx";
 export const CONFIG_FILE_NAME = "config.yaml";
 export const POLICY_FILE_NAME = "policy.yaml";
@@ -12,7 +14,7 @@ export const DEFAULT_CONFIG = {
   missions_dir: MISSIONS_DIR_NAME
 } as const;
 
-export const DEFAULT_POLICY = {
+export const DEFAULT_POLICY: WorkspacePolicy = {
   mode: "ask",
   allow_network: false,
   shell: "ask",
@@ -34,8 +36,12 @@ export const DEFAULT_POLICY = {
   },
   external_communication: "block",
   credentials: "block",
-  cloud_model_sensitive_context: "ask"
-} as const;
+  cloud_model_sensitive_context: "ask",
+  browser: "block",
+  browser_hosts_allow: [],
+  browser_max_navigation_ms: 30_000,
+  browser_max_steps_per_session: 50
+};
 
 export function defaultConfigYaml(): string {
   return `${YAML.stringify(DEFAULT_CONFIG)}\n`;

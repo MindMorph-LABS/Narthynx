@@ -36,9 +36,50 @@ Shell actions are not treated as reversible. Narthynx records what happened but 
 
 `git.log` is a read-only connector that runs Git without a shell and captures recent commit history as a mission artifact when inside a Git repository.
 
+## Browser connector (Playwright, Phase 16)
+
+Headless Chromium via **Playwright**. Each tool run uses an **ephemeral** browser (launch, one action, close). All `browser.*` tools are **typed tools**: Zod schemas, ledger events, **`network`** side effect, **`high`** risk, **`requiresApproval: true`**, and continued execution through `runApprovedTool` / `narthynx approve` like `shell.run`.
+
+### Policy (`policy.yaml`)
+
+| Key | Purpose |
+| --- | --- |
+| `browser` | `block` (default) or `ask`. When `block`, browser tools are denied regardless of `allow_network`. |
+| `browser_hosts_allow` | Non-empty list required when `browser: ask` tools are used. URL prefixes (e.g. `https://example.com/`), optional trailing `*` prefix match, or bare hostnames (e.g. `example.com`). Each tool `url` must match. |
+| `allow_network` | Must be `true` to **execute** browser tools after approval. |
+| `browser_max_navigation_ms` | Playwright navigation and default timeouts (default 30000). |
+| `browser_max_steps_per_session` | Reserved for future session reuse. |
+
+**Blocked URL schemes:** `file:`, `javascript:`, `data:` (always denied).
+
+### Tools
+
+| Tool | Input (summary) | Output / artifacts |
+| --- | --- | --- |
+| `browser.navigate` | `url`, optional `waitUntil` | `title`, `finalUrl` |
+| `browser.snapshot` | `url`, optional `maxChars` | Accessibility-style JSON of title, URL, body text; artifact `browser_snapshot` under `artifacts/outputs/` |
+| `browser.screenshot` | `url`, optional `fullPage` | PNG; artifact `browser_screenshot` under `artifacts/screenshots/` |
+| `browser.click` | `url`, `selector` **or** `role` + `name` | Confirmation |
+| `browser.fill` | same + `value` | Confirmation |
+| `browser.press` | `url`, `key` (e.g. `Enter`) | Confirmation |
+
+### Install (local runs)
+
+Playwright is an npm dependency; browser binaries are not bundled:
+
+```bash
+pnpm exec playwright install
+```
+
+### Non-goals
+
+- Autonomous login, 2FA, CAPTCHA solving, or payment flows (use operator handoff).
+- Hosted browser grids or cloud browsers.
+- Replacing the mission runtime; Narthynx remains a **Mission Agent OS**, not a browser-only automation stack.
+
 ## Anti-Goals
 
-Phase 11 does not add mutating Git commands, raw shell strings, network connectors, external communication, browser automation, or hosted execution.
+Phase 11 does not add mutating Git commands, raw shell strings, or hosted execution. **Phase 11** did not include browser automation; the **browser connector** is a later typed-tool slice (see above).
 
 ## Event-to-mission triggers (ingress)
 
@@ -64,12 +105,12 @@ The Phase 13 executor uses connectors only through the typed runtime:
 - the approval pause uses the existing approval queue
 - final reporting uses the existing report artifact path
 
-The executor does not use `shell.run`, cloud model routing, external communication, browser automation, or arbitrary filesystem writes.
+Browser tools are not used by the default Phase 13 graph; they are available to missions and operators when policy permits.
 
 ## Phase 14 Documentation Rules
 
-Connector docs and examples must describe implemented behavior only. Post-MVP connector candidates such as browser automation, MCP, GitHub, email, calendar, and hosted sync remain out of scope until they are implemented as typed tools with schemas, policy classification, approval behavior, ledger records, artifacts where useful, and tests.
+Connector docs and examples must describe implemented behavior only. Further connectors (for example deeper MCP, GitHub, email, calendar, hosted sync) remain incremental. **Browser automation** is implemented as typed `browser.*` tools with policy and tests (see Browser connector section).
 
 ## Phase 15 Mission Kit Is Not A Connector
 
-Templates, context diet, and proof cards are local mission primitives, not external connectors. They do not add browser automation, MCP, GitHub, email, calendar, network calls, hosted sync, or external communication.
+Templates, context diet, and proof cards are local mission primitives. Mission Kit does not bundle Playwright or headless browser execution; use typed `browser.*` tools when policy allows.
