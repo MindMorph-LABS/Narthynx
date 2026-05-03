@@ -10,7 +10,8 @@ import {
   POLICY_FILE_NAME,
   WORKSPACE_DIR_NAME,
   defaultConfigYaml,
-  defaultPolicyYaml
+  defaultPolicyYaml,
+  VAULT_KDF_SALT_FILE_NAME
 } from "./defaults";
 import { IDENTITY_FILE_NAME, loadWorkspaceIdentityFile } from "./identity-config";
 import { loadContextDietConfig } from "./context-diet-config";
@@ -19,6 +20,7 @@ import { getGithubAuthToken } from "./github-env";
 import { findMcpServer, loadMcpConfig } from "./mcp-config";
 import { loadModelRoutingConfig, MODEL_ROUTING_FILE_NAME } from "./model-routing-config";
 import { loadWorkspaceConfig, loadWorkspacePolicy } from "./load";
+import { anyMissionUsesVault } from "../missions/vault-scan";
 
 export interface WorkspacePaths {
   rootDir: string;
@@ -32,6 +34,7 @@ export interface WorkspacePaths {
   githubFile: string;
   mcpCacheDir: string;
   missionsDir: string;
+  vaultKdfSaltFile: string;
 }
 
 export interface WorkspaceInitResult {
@@ -68,7 +71,8 @@ export function resolveWorkspacePaths(cwd = process.cwd()): WorkspacePaths {
     mcpFile: path.join(workspaceDir, MCP_FILE_NAME),
     githubFile: path.join(workspaceDir, GITHUB_FILE_NAME),
     mcpCacheDir: path.join(workspaceDir, ".cache", "mcp-tools"),
-    missionsDir: path.join(workspaceDir, MISSIONS_DIR_NAME)
+    missionsDir: path.join(workspaceDir, MISSIONS_DIR_NAME),
+    vaultKdfSaltFile: path.join(workspaceDir, VAULT_KDF_SALT_FILE_NAME)
   };
 }
 
@@ -128,6 +132,28 @@ export async function doctorWorkspace(cwd = process.cwd()): Promise<DoctorResult
           ? "no identity.yaml (using NARTHYNX_ACTOR_ID for ledger attribution)"
           : "no identity.yaml (optional; set identity.yaml or NARTHYNX_ACTOR_ID for approval/note attribution)"
   });
+
+  const usesVault = await anyMissionUsesVault(paths.missionsDir);
+  const vaultSaltStat = await stat(paths.vaultKdfSaltFile).catch(() => undefined);
+  checks.push({
+    name: "vault KDF salt",
+    ok: !usesVault || Boolean(vaultSaltStat?.isFile()),
+    message: usesVault
+      ? vaultSaltStat?.isFile()
+        ? `vault KDF salt OK (${VAULT_KDF_SALT_FILE_NAME})`
+        : `missions have vault entries but ${VAULT_KDF_SALT_FILE_NAME} is missing — run: narthynx vault init`
+      : vaultSaltStat?.isFile()
+        ? `${VAULT_KDF_SALT_FILE_NAME} present (no vault entries yet; optional)`
+        : `no vault entries yet (${VAULT_KDF_SALT_FILE_NAME} created on first vault put or vault init)`
+  });
+
+  if (process.env.NARTHYNX_VAULT_PASSPHRASE !== undefined && process.env.NARTHYNX_VAULT_PASSPHRASE.trim() !== "") {
+    checks.push({
+      name: "vault passphrase env",
+      ok: true,
+      message: "NARTHYNX_VAULT_PASSPHRASE is set — keep it out of logs, shell history, and CI output"
+    });
+  }
 
   const mcpConfig = await loadMcpConfig(paths.mcpFile);
   checks.push({

@@ -34,6 +34,8 @@ export const policySchema = z.object({
   mcp_servers_allow: z.array(z.string()).optional(),
   mcp_max_concurrent_sessions: z.number().int().min(1).max(8).optional(),
   github: z.enum(["block", "ask"]).default("block"),
+  /** Per-mission encrypted vault reads (`vault.read`). Default block. */
+  vault: z.enum(["block", "ask", "allow"]).default("block"),
   /** When set, only these `owner/repo` refs (case-insensitive) may be targeted by github.* tools. */
   github_repos_allow: z.array(z.string().min(1)).optional()
 });

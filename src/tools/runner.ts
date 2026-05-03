@@ -6,6 +6,7 @@ import { resolveWorkspacePaths } from "../config/workspace";
 import { createApprovalStore } from "../missions/approvals";
 import { createCheckpointStore } from "../missions/checkpoints";
 import { appendLedgerEvent, ledgerFilePath } from "../missions/ledger";
+import { fingerprintVaultEntry } from "../missions/vault-crypto";
 import { createMissionStore, missionDirectory } from "../missions/store";
 import { extractBrowserUrlsFromInput, isBrowserToolName, classifyBrowserInputSafety } from "./browser-guard";
 import { classifyShellRunInputSafety, shellRunApprovalTarget } from "./command-safety";
@@ -228,6 +229,19 @@ async function executeTool(input: {
       return { ok: false, toolName: input.tool.name, message, blocked: false };
     }
 
+    if (input.tool.name === "vault.read") {
+      const vin = input.input as { missionId: string; name: string; encoding?: string };
+      await appendLedgerEvent(input.ledgerPath, {
+        missionId: input.missionId,
+        type: "vault.secret_read",
+        summary: "Vault secret read (value redacted from ledger)",
+        details: {
+          entryFingerprint: fingerprintVaultEntry(vin.missionId, vin.name),
+          encoding: vin.encoding ?? "utf8"
+        }
+      });
+    }
+
     await appendLedgerEvent(input.ledgerPath, {
       missionId: input.missionId,
       type: "tool.completed",
@@ -385,6 +399,13 @@ function approvalTargetForTool(toolName: string, input: unknown): string | undef
     return `github:${ref}`;
   }
 
+  if (toolName === "vault.read" && typeof input === "object" && input !== null && "name" in input) {
+    const name = (input as { name?: unknown }).name;
+    if (typeof name === "string") {
+      return `vault:${name}`;
+    }
+  }
+
   if (typeof input === "object" && input !== null && "path" in input) {
     const value = (input as { path?: unknown }).path;
     return typeof value === "string" ? value : undefined;
@@ -398,6 +419,7 @@ function isApprovalContinuationTool(toolName: string): boolean {
     toolName === "filesystem.write" ||
     toolName === "report.write" ||
     toolName === "shell.run" ||
+    toolName === "vault.read" ||
     toolName === "mcp.tools.list" ||
     toolName === "mcp.tools.call" ||
     toolName === "github.issues.create" ||

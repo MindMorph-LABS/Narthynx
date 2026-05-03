@@ -8,6 +8,8 @@ The Phase 0-14 MVP track is implemented. Narthynx can create durable local missi
 
 Narthynx does not execute arbitrary raw shell strings, read credentials by default, call networks by default, send external communications, or perform model-selected autonomous tool execution in the current MVP.
 
+**Encrypted mission vault (Phase 15d):** Optional per-mission encrypted storage (`.narthynx/missions/<id>/vault/`) and `narthynx vault` CLI hold secrets at rest. Runtime reads use the `vault.read` tool with `vault` policy (default **block**); set **`NARTHYNX_VAULT_PASSPHRASE`** only for approved automation and never log it. The Mission Cockpit HTTP API does not expose vault contents in v1.
+
 ## Security Principles
 
 - No irreversible action without explicit approval.

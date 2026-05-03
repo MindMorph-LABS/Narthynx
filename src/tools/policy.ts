@@ -33,6 +33,16 @@ export function classifyToolPolicy(
   policy: WorkspacePolicy,
   toolInput?: unknown
 ): ToolPolicyDecision {
+  if (tool.name === "vault.read") {
+    if (policy.vault === "block") {
+      return block(tool, "Vault reads are blocked by policy (vault: block).");
+    }
+    if (policy.vault === "ask") {
+      return approval(tool, "Vault read requires approval (vault: ask).");
+    }
+    return allow(tool, "Vault read allowed (vault: allow).");
+  }
+
   if (isBrowserToolName(tool.name)) {
     if (policy.browser === "block") {
       return block(tool, "Browser tools are blocked by policy (browser: block).");

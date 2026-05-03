@@ -179,6 +179,6 @@ Phase 15 adds mission-native helpers without changing the core mission contract:
 - the **model context pack** is a derived view: mission notes and allowed files (plus optional `workspace-notes.md`) merged under byte/token budgets; ledger event `context.pack_built` records sizes, omissions, and whether the pack was classified as sensitive
 - proof cards create compact Markdown artifacts at `artifacts/proof-card.md`
 - optional **`.narthynx/model-routing.yaml`** defines per-task OpenAI-compatible or stub **endpoints**, a single **fallback** per provider chain, and optional mission **budgets** (`fail_closed` vs `downgrade_stub`); when absent, model selection follows environment defaults (stub-first)
-- optional **`.narthynx/identity.yaml`** (`actor_id`, optional `display_name`) or env `NARTHYNX_ACTOR_ID` / `NARTHYNX_ACTOR_DISPLAY_NAME` attributes human actions (approvals, context notes) in the mission ledger for collaboration audit and replay
+- optional **encrypted mission vault** per mission under `.narthynx/missions/<id>/vault/` with workspace **`.narthynx/vault-kdf.salt`**; CLI `narthynx vault`; runtime **`vault.read`** behind `vault` policy; ledger **`vault.secret_read`** is redacted (see **`docs/vault.md`**)
 
 These features must use existing mission stores, ledger events, artifacts, reports, and replay surfaces rather than bypassing persisted state.
