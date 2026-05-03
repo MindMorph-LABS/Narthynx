@@ -1,6 +1,8 @@
 import type { ZodError } from "zod";
 
+import { loadWorkspacePolicy } from "../config/load";
 import { resolveWorkspacePaths } from "../config/workspace";
+import { buildModelContextPack } from "../missions/context-diet";
 import { createDeterministicPlanGraph, planGraphSchema, type PlanGraph } from "../missions/graph";
 import { appendLedgerEvent, ledgerFilePath } from "../missions/ledger";
 import { createMissionStore, missionDirectory } from "../missions/store";
@@ -20,13 +22,38 @@ export function createModelPlanner(cwd = process.cwd(), routerOptions: Omit<Mode
     async generatePlan(missionId: string): Promise<ModelPlanResult> {
       const mission = await missionStore.readMission(missionId);
       const fallbackGraph = createDeterministicPlanGraph(mission);
+      const paths = resolveWorkspacePaths(cwd);
+      const policy = await loadWorkspacePolicy(paths.policyFile);
+
+      let packBlock:
+        | {
+            text: string;
+            totals: { bytes: number; estimatedTokens: number; includedCount: number };
+            sensitiveContextIncluded: boolean;
+          }
+        | undefined;
+      let sensitiveContextIncluded = false;
+
+      if (policy.ok && policy.value.cloud_model_sensitive_context === "allow") {
+        const pack = await buildModelContextPack(missionId, cwd);
+        packBlock = {
+          text: pack.packText,
+          totals: {
+            bytes: pack.totals.bytes,
+            estimatedTokens: pack.totals.estimatedTokens,
+            includedCount: pack.totals.includedCount
+          },
+          sensitiveContextIncluded: pack.sensitiveContextIncluded
+        };
+        sensitiveContextIncluded = pack.sensitiveContextIncluded;
+      }
 
       try {
         const response = await router.call({
           missionId,
           task: "planning",
           purpose: "mission planning",
-          sensitiveContextIncluded: false,
+          sensitiveContextIncluded,
           input: {
             mission: {
               id: mission.id,
@@ -35,7 +62,12 @@ export function createModelPlanner(cwd = process.cwd(), routerOptions: Omit<Mode
               successCriteria: mission.successCriteria
             },
             expectedGraphSchema: "PlanGraph v1",
-            baselineGraph: fallbackGraph
+            baselineGraph: fallbackGraph,
+            ...(packBlock
+              ? {
+                  modelContextPack: packBlock
+                }
+              : {})
           }
         });
         const graph = parseModelPlan(response.content);

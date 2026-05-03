@@ -123,7 +123,15 @@ The MVP blocks or approval-gates behavior that can leave the local workspace or 
 - reading known secret-like files
 - sending sensitive local context to cloud models
 
-Future features may add more typed workflows for some of these actions, but only with explicit policy, approval, ledger, and honest rollback/checkpoint behavior.
+### Model context pack
+
+The **model context pack** is built from mission `context.json` / files under policy, with optional workspace notes only when `include_workspace_notes: true` in `context-diet.yaml`. It applies size limits and can omit or flag **stale** files (content hash or mtime differs from attach time). It does not replace `context.md`; it is a bounded view for model calls.
+
+Packs are classified for sensitivity using the same path heuristics as `@` attach and text heuristics used for workspace notes (API keys, private key blocks, common token patterns). The ledger records `context.pack_built` with sizes and `sensitiveContextIncluded`.
+
+When `cloud_model_sensitive_context` is **`allow`**, model planning may attach the pack to the router input and sets `sensitiveContextIncluded` to match that classification. Values **`block`** and **`ask`** do not attach the pack to cloud routes (unchanged Phase 12 behavior for networked providers and approvals).
+
+Future features may add more typed workflows for some of the actions in this document, but only with explicit policy, approval, ledger, and honest rollback/checkpoint behavior.
 
 ## Shell And Git Connectors
 

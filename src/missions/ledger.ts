@@ -26,6 +26,7 @@ export const ledgerEventTypeSchema = z.enum([
   "model.called",
   "cost.recorded",
   "user.note",
+  "context.pack_built",
   "error"
 ]);
 
