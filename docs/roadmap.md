@@ -21,6 +21,7 @@ Narthynx is built in phases. Each phase must leave the repo runnable and testabl
 - Phase 14: Complete
 - Phase 15: Complete (context diet engine: `context-diet.yaml`, model context pack, ledger `context.pack_built`, planner wiring when `cloud_model_sensitive_context` is `allow` or `ask`; optional LLM summarization of context remains future work)
 - Phase 15b (Hybrid inference): Partial — `model-routing.yaml`, loopback vs cloud policy, primary/fallback routing, mission budgets, `narthynx.model.sensitive_context` approvals, ledger routing metadata; hosted remote mission workers remain out of scope
+- Phase 15c (Collaboration audit): Partial — `.narthynx/identity.yaml` or env actor env vars; ledger `details.actor` on approvals and user context notes; replay shows attribution; roles/sync remain future work
 - Phase 16 (Browser connector): Partial (typed Playwright tools shipped; session reuse / CDP are future work)
 - Phase 17 (MCP connector): Partial — stdio client, `mcp.*` tools, policy + approvals; remote HTTP/SSE and mission-scoped session reuse are future work
 - Phase 18 (GitHub connector): Partial — REST `github.*` tools, `github.yaml`, policy + spillover artifacts; GitHub Apps and GraphQL are future work
@@ -46,6 +47,7 @@ Narthynx is built in phases. Each phase must leave the repo runnable and testabl
 | 14 | Open-Source Polish | Complete | Prepare public repo quality, examples, docs, issue templates, and release checklist |
 | 15 | Mission Kit | Complete | Add templates, context diet basics, proof cards, and Phase 15.5 interactive shell UX |
 | 15b | Hybrid inference (local/cloud models) | Partial | Optional `model-routing.yaml`, per-task routes and fallback, loopback-aware policy, sensitive cloud consent approvals, mission budgets |
+| 15c | Collaboration audit | Partial | Optional `identity.yaml`, ledger actor on approvals and context `user.note`, replay attribution |
 | 16 | Browser connector (Playwright) | Partial | Typed `browser.*` tools, policy allowlist, approval + ledger, ephemeral sessions; install browsers via `pnpm exec playwright install` |
 | 17 | MCP connector (stdio) | Partial | Typed `mcp.*` tools, `.narthynx/mcp.yaml`, policy + approvals, tool-list cache, spillover artifacts; stdio only in v1 |
 | 18 | GitHub connector (REST) | Partial | Typed `github.*` tools, `.narthynx/github.yaml`, PAT via env, repo allowlists, spillover `github_api_response` artifacts |

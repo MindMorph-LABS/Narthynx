@@ -12,6 +12,7 @@ import {
   defaultConfigYaml,
   defaultPolicyYaml
 } from "./defaults";
+import { IDENTITY_FILE_NAME, loadWorkspaceIdentityFile } from "./identity-config";
 import { loadContextDietConfig } from "./context-diet-config";
 import { loadGithubConfig, normalizeRepoAllowEntry } from "./github-config";
 import { getGithubAuthToken } from "./github-env";
@@ -24,6 +25,7 @@ export interface WorkspacePaths {
   workspaceDir: string;
   configFile: string;
   policyFile: string;
+  identityFile: string;
   contextDietFile: string;
   modelRoutingFile: string;
   mcpFile: string;
@@ -60,6 +62,7 @@ export function resolveWorkspacePaths(cwd = process.cwd()): WorkspacePaths {
     workspaceDir,
     configFile: path.join(workspaceDir, CONFIG_FILE_NAME),
     policyFile: path.join(workspaceDir, POLICY_FILE_NAME),
+    identityFile: path.join(workspaceDir, IDENTITY_FILE_NAME),
     contextDietFile: path.join(workspaceDir, CONTEXT_DIET_FILE_NAME),
     modelRoutingFile: path.join(workspaceDir, MODEL_ROUTING_FILE_NAME),
     mcpFile: path.join(workspaceDir, MCP_FILE_NAME),
@@ -107,6 +110,23 @@ export async function doctorWorkspace(cwd = process.cwd()): Promise<DoctorResult
     name: "policy yaml",
     ok: policy.ok,
     message: policy.ok ? "policy.yaml parsed and passed validation" : `policy.yaml invalid: ${policy.message}`
+  });
+
+  const identityStat = await stat(paths.identityFile).catch(() => undefined);
+  const identityLoad = await loadWorkspaceIdentityFile(paths.identityFile);
+  const identityOk = identityLoad.ok || identityLoad.message === "ENOENT";
+  checks.push({
+    name: "identity yaml",
+    ok: identityOk,
+    message: !identityOk
+      ? `identity.yaml invalid: ${identityLoad.message}`
+      : identityStat?.isFile()
+        ? identityLoad.ok
+          ? `identity.yaml OK (actor_id=${identityLoad.value.actor_id})`
+          : "identity.yaml missing"
+        : process.env.NARTHYNX_ACTOR_ID?.trim()
+          ? "no identity.yaml (using NARTHYNX_ACTOR_ID for ledger attribution)"
+          : "no identity.yaml (optional; set identity.yaml or NARTHYNX_ACTOR_ID for approval/note attribution)"
   });
 
   const mcpConfig = await loadMcpConfig(paths.mcpFile);

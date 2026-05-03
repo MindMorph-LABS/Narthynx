@@ -69,6 +69,10 @@ mcp_max_concurrent_sessions: 1
 github: block
 ```
 
+## Workspace identity (collaboration audit)
+
+Optional **`.narthynx/identity.yaml`** sets a stable **`actor_id`** and optional **`display_name`**. Alternatively, set **`NARTHYNX_ACTOR_ID`** (and optional **`NARTHYNX_ACTOR_DISPLAY_NAME`**) when no file is present. When configured, human-initiated ledger events such as **`tool.approved`**, **`tool.denied`**, and **`user.note`** include **`details.actor`** so replay and exports can show who approved or edited context. This does not grant multi-user authorization by itself; future **`team.yaml`** / roles build on the same attribution.
+
 ## Browser tools and policy
 
 Browser tools (`browser.*`) are **off by default** (`browser: block`). Enabling them requires:

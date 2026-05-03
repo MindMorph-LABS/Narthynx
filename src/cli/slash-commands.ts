@@ -1,5 +1,6 @@
 import { loadContextDietConfig } from "../config/context-diet-config";
 import { loadWorkspacePolicy } from "../config/load";
+import { resolveWorkspaceActor } from "../config/identity-config";
 import { doctorWorkspace, resolveWorkspacePaths } from "../config/workspace";
 import { createCostService } from "../agent/cost";
 import { createMissionExecutor } from "../agent/executor";
@@ -407,7 +408,9 @@ async function handleApproveCommand(
   }
 
   const decision = parsed.deny ? "denied" : "approved";
-  const approval = await stores.approvalStore.decideApproval(parsed.approvalId, decision, parsed.reason);
+  const paths = resolveWorkspacePaths(context.cwd);
+  const actor = await resolveWorkspaceActor(paths.identityFile);
+  const approval = await stores.approvalStore.decideApproval(parsed.approvalId, decision, parsed.reason, { actor });
   context.renderer.info(`Approval ${approval.status}: ${approval.id}`);
   context.renderer.info(`mission: ${approval.missionId}`);
   context.renderer.info(`tool: ${approval.toolName}`);

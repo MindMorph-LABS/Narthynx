@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { resolveWorkspacePaths } from "../config/workspace";
 import { createApprovalId } from "../utils/ids";
+import type { LedgerActorRef } from "./ledger";
 import { appendLedgerEvent, ledgerFilePath } from "./ledger";
 import { riskLevelSchema } from "./schema";
 import { missionDirectory, missionFilePath } from "./store";
@@ -50,7 +51,12 @@ export interface ApprovalStore {
   getApproval(id: string): Promise<ApprovalRequest>;
   listMissionApprovals(missionId: string, options?: { allowMissing?: boolean }): Promise<ApprovalRequest[]>;
   listPendingApprovals(): Promise<ApprovalRequest[]>;
-  decideApproval(id: string, decision: "approved" | "denied", reason?: string): Promise<ApprovalRequest>;
+  decideApproval(
+    id: string,
+    decision: "approved" | "denied",
+    reason?: string,
+    options?: { actor?: LedgerActorRef }
+  ): Promise<ApprovalRequest>;
   markApprovalExecuted(id: string, checkpointId?: string): Promise<ApprovalRequest>;
 }
 
@@ -113,7 +119,7 @@ export function createApprovalStore(cwd = process.cwd()): ApprovalStore {
         .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
     },
 
-    async decideApproval(id, decision, reason) {
+    async decideApproval(id, decision, reason, options = {}) {
       const found = await findApprovalById(paths.missionsDir, id);
       if (!found) {
         throw new Error(`Approval not found: ${id}`);
@@ -149,6 +155,7 @@ export function createApprovalStore(cwd = process.cwd()): ApprovalStore {
           toolName: updated.toolName,
           reason
         },
+        actor: options.actor,
         timestamp: now
       });
 

@@ -7,6 +7,11 @@ import { createLedgerEventId } from "../utils/ids";
 
 export const LEDGER_FILE_NAME = "ledger.jsonl";
 
+export interface LedgerActorRef {
+  id: string;
+  displayName?: string;
+}
+
 export const ledgerEventTypeSchema = z.enum([
   "mission.created",
   "mission.state_changed",
@@ -48,6 +53,8 @@ export interface CreateLedgerEventInput {
   summary: string;
   details?: Record<string, unknown>;
   timestamp?: string;
+  /** When set, merged into `details.actor` for collaboration audit (Phase 15+). */
+  actor?: LedgerActorRef;
 }
 
 export function ledgerFilePath(missionDir: string): string {
@@ -55,14 +62,29 @@ export function ledgerFilePath(missionDir: string): string {
 }
 
 export function createLedgerEvent(input: CreateLedgerEventInput): LedgerEvent {
+  const details = mergeLedgerDetails(input.details, input.actor);
   return ledgerEventSchema.parse({
     id: createLedgerEventId(),
     missionId: input.missionId,
     type: input.type,
     timestamp: input.timestamp ?? new Date().toISOString(),
     summary: input.summary,
-    details: input.details
+    details
   });
+}
+
+function mergeLedgerDetails(
+  details: Record<string, unknown> | undefined,
+  actor: LedgerActorRef | undefined
+): Record<string, unknown> | undefined {
+  const base = details ? { ...details } : {};
+  if (actor) {
+    base.actor = {
+      id: actor.id,
+      ...(actor.displayName ? { displayName: actor.displayName } : {})
+    };
+  }
+  return Object.keys(base).length > 0 ? base : undefined;
 }
 
 export async function appendLedgerEvent(filePath: string, input: CreateLedgerEventInput): Promise<LedgerEvent> {

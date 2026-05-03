@@ -6,6 +6,7 @@ import YAML from "yaml";
 import { z } from "zod";
 
 import { loadWorkspacePolicy } from "../config/load";
+import { resolveWorkspaceActor } from "../config/identity-config";
 import { resolveWorkspacePaths } from "../config/workspace";
 import { resolveGuardedWorkspacePath } from "../tools/path-guard";
 import { appendLedgerEvent, ledgerFilePath } from "./ledger";
@@ -74,6 +75,10 @@ export async function writeMissionContextIndex(cwd: string, index: ContextIndex)
 export function createMissionContextService(cwd = process.cwd()) {
   const paths = resolveWorkspacePaths(cwd);
   const missionStore = createMissionStore(cwd);
+
+  async function ledgerActor() {
+    return resolveWorkspaceActor(paths.identityFile);
+  }
 
   return {
     async summarizeContext(missionId: string): Promise<ContextSummary> {
@@ -156,6 +161,7 @@ export function createMissionContextService(cwd = process.cwd()) {
           notes: [...mission.context.notes, trimmed],
           files: mission.context.files
         });
+        const actor = await ledgerActor();
         await appendLedgerEvent(ledgerPath(missionId), {
           missionId,
           type: "user.note",
@@ -165,6 +171,7 @@ export function createMissionContextService(cwd = process.cwd()) {
             contextEntries: updatedIndex.entries.length,
             duplicateOf: canonical.addedAt
           },
+          actor,
           timestamp: now
         });
 
@@ -186,6 +193,7 @@ export function createMissionContextService(cwd = process.cwd()) {
         notes: [...mission.context.notes, trimmed],
         files: mission.context.files
       });
+      const actor = await ledgerActor();
       await appendLedgerEvent(ledgerPath(missionId), {
         missionId,
         type: "user.note",
@@ -194,6 +202,7 @@ export function createMissionContextService(cwd = process.cwd()) {
           bytes,
           contextEntries: index.entries.length
         },
+        actor,
         timestamp: now
       });
 
@@ -212,6 +221,7 @@ export function createMissionContextService(cwd = process.cwd()) {
         throw new Error(`policy.yaml invalid: ${policy.message}`);
       }
 
+      const actor = await ledgerActor();
       const guarded = resolveGuardedWorkspacePath(cwd, requestedPath, policy.value);
       const target = await stat(guarded.absolutePath);
       if (!target.isFile()) {
@@ -258,6 +268,7 @@ export function createMissionContextService(cwd = process.cwd()) {
             bytes,
             duplicate: true
           },
+          actor,
           timestamp: now
         });
 
@@ -311,6 +322,7 @@ export function createMissionContextService(cwd = process.cwd()) {
             canonicalPath: canonicalFile.source,
             bytes: 0
           },
+          actor,
           timestamp: now
         });
 
@@ -354,6 +366,7 @@ export function createMissionContextService(cwd = process.cwd()) {
           bytes,
           duplicate: false
         },
+        actor,
         timestamp: now
       });
 

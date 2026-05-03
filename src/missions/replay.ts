@@ -166,7 +166,9 @@ function renderToolFailure(event: LedgerEvent): string {
 function renderToolDecision(label: string, event: LedgerEvent): string {
   const base = renderToolEvent(label, event);
   const approvalId = stringDetail(event.details, "approvalId");
-  return approvalId ? `${base} (${approvalId})` : base;
+  const actor = formatActorSuffix(event.details);
+  const mid = approvalId ? `${base} (${approvalId})` : base;
+  return `${mid}${actor}`;
 }
 
 function renderToolDenied(event: LedgerEvent): string {
@@ -237,12 +239,30 @@ function renderUserNote(event: LedgerEvent): string {
   const checkpointId = stringDetail(event.details, "checkpointId");
   const fileRollback = booleanDetail(event.details, "fileRollback");
   const targetPath = stringDetail(event.details, "targetPath");
+  const actor = formatActorSuffix(event.details);
 
   if (checkpointId && fileRollback) {
-    return targetPath ? `Checkpoint rewound: ${targetPath} (${checkpointId})` : `Checkpoint rewound: ${checkpointId}`;
+    return (
+      (targetPath ? `Checkpoint rewound: ${targetPath} (${checkpointId})` : `Checkpoint rewound: ${checkpointId}`) + actor
+    );
   }
 
-  return `User note: ${event.summary}`;
+  return `User note: ${event.summary}${actor}`;
+}
+
+function formatActorSuffix(details: Record<string, unknown> | undefined): string {
+  const actor = details?.actor;
+  if (!actor || typeof actor !== "object") {
+    return "";
+  }
+  const rec = actor as Record<string, unknown>;
+  const id = rec.id;
+  if (typeof id !== "string" || id.length === 0) {
+    return "";
+  }
+  const dn = rec.displayName;
+  const label = typeof dn === "string" && dn.length > 0 ? `${dn} (${id})` : id;
+  return ` by ${label}`;
 }
 
 function withMessage(base: string, details: Record<string, unknown> | undefined): string {

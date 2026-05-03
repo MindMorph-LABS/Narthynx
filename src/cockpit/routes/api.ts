@@ -1,6 +1,7 @@
 import path from "node:path";
 import { z } from "zod";
 
+import { resolveWorkspaceActor } from "../../config/identity-config";
 import { doctorWorkspace, resolveWorkspacePaths } from "../../config/workspace";
 import type { LedgerEvent } from "../../missions/ledger";
 import { buildMissionReplay } from "../../missions/replay";
@@ -259,7 +260,8 @@ export function createCockpitApiRouter(cwd: string): Hono {
     }
 
     try {
-      const approval = await approvalStore.decideApproval(parsedId.data, body.decision, body.reason);
+      const actor = await resolveWorkspaceActor(paths.identityFile);
+      const approval = await approvalStore.decideApproval(parsedId.data, body.decision, body.reason, { actor });
 
       const response: {
         approval: typeof approval;

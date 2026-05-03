@@ -12,6 +12,7 @@ import { createModelPlanner } from "../agent/model-planner";
 import { loadContextDietConfig } from "../config/context-diet-config";
 import { loadMcpConfig } from "../config/mcp-config";
 import { loadWorkspacePolicy } from "../config/load";
+import { resolveWorkspaceActor } from "../config/identity-config";
 import { doctorWorkspace, initWorkspace, resolveWorkspacePaths } from "../config/workspace";
 import { runCockpitServer, resolveCockpitPort } from "../cockpit/serve";
 import { runInteractiveSession } from "./interactive";
@@ -690,7 +691,9 @@ export function createProgram(io: CliIo, options: CliOptions = {}): Command {
         }
 
         const decision = commandOptions.deny ? "denied" : "approved";
-        const approval = await approvalStore.decideApproval(approvalId, decision, commandOptions.reason);
+        const paths = resolveWorkspacePaths(cwd);
+        const actor = await resolveWorkspaceActor(paths.identityFile);
+        const approval = await approvalStore.decideApproval(approvalId, decision, commandOptions.reason, { actor });
         io.writeOut(`Approval ${approval.status}: ${approval.id}\n`);
         io.writeOut(`mission: ${approval.missionId}\n`);
         io.writeOut(`tool: ${approval.toolName}\n`);
