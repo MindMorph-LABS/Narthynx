@@ -39,6 +39,16 @@ Use focused branches and small commits when possible. A good PR should explain:
 - how ledger, replay, reports, approvals, or artifacts are affected
 - which commands verified the change
 
+## Merging into `main`
+
+The default branch **`main` is branch-protected** on GitHub (direct pushes and non-PR updates are rejected). **Always merge via GitHub:**
+
+1. Push your branch to `origin` (feature branch, or a one-off integration branch such as `feat/merge-*` if you already merged locally).
+2. Open GitHub **Compare / pull request** from your branch → `main` (for example: `https://github.com/<org>/<repo>/compare/main...<your-branch>?expand=1`).
+3. Create the PR and **merge on GitHub** after review and checks (use the repository’s required merge method).
+
+Do not rely on `git push origin main` or automating merge without a PR unless repository settings explicitly allow it.
+
 ## Phase Discipline
 
 The MVP through Phase 14 is implemented. Phase 15 and later work is post-MVP and should not be smuggled into unrelated changes.
